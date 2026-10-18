@@ -25,6 +25,8 @@ backups/
 *.[mM][pP]4
 *.[dD][nN][gG]
 *.[pP][eE][fF]
+!assets/
+!assets/**
 coverage/
 test-results/
 playwright-report/

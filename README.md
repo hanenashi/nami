@@ -1,6 +1,10 @@
 # nami
 photo sharing done terribly right
 
+<p align="center">
+  <img src="assets/nami.png" alt="NAMI avatar" width="400">
+</p>
+
 **NAMI / なみ / mezi námi** — memories made together.
 
 A small, self-hostable place for family and friends to share photographs from
