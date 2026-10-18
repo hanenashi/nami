@@ -189,6 +189,22 @@ Provide .env.example (no secrets), .gitignore, healthcheck, data location explan
 
 ## 10. Implementation milestones (one at a time)
 
+### Agreed sequencing refinement (2026-10-19)
+
+Start deliberately small. M0 remains the first checkpoint. After basic private
+events/invitations, build one complete photo path: upload one JPEG, preserve its
+bytes, make a thumbnail, show it in the event, and download the original. Prove
+HEIC previews in the actual container early, before expanding to bulk uploads.
+The original M2–M4 lists below remain the feature inventory, not a requirement to
+finish transfer infrastructure before building the first useful gallery.
+
+Primary family testers use iPad and iPhone Safari. Verify large readable controls
+and minimal typing. Automated WebKit checks supplement, but do not replace,
+real-device testing. Bring permission, quota and recovery checks into the slice
+that introduces each feature. Decide invite disabling versus revoking redeemed
+access explicitly; define duplicate-contribution/removal rules before deduplication.
+Backup design must coordinate the database snapshot with original files and GC.
+
 ### M0 — Bootstrap (first work order)
 - [ ] Inspect existing README/repo and actual environment; settle compatible dependency versions.
 - [ ] Scaffold web/API, minimal NAMI landing page and Fastify health route.

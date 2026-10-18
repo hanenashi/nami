@@ -1,0 +1,25 @@
+name: nami
+services:
+  nami:
+    build: .
+    ports:
+      - "127.0.0.1:${NAMI_PORT:-3000}:3000"
+    user: "${NAMI_UID:-1000}:${NAMI_GID:-1000}"
+    volumes:
+      - type: bind
+        source: ${NAMI_DATA_DIR:-../nami-data}
+        target: /data
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
