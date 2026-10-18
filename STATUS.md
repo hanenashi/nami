@@ -1,6 +1,6 @@
 # NAMI status
 
-2026-10-19 — M0 implemented; Docker verification pending.
+2026-10-19 — M0 complete and verified locally, including Docker.
 
 ## Working locally
 
@@ -29,6 +29,13 @@
   not image construction or daemon behavior.
 - Native production server demonstrated at `http://127.0.0.1:3000`; healthcheck
   returned `{"status":"ok","service":"nami"}`. This is local to Beechan.
+- Fresh-clone `docker compose up --build -d --wait` succeeded with a new external
+  data directory. All 3 browser tests passed against the container on loopback.
+- Docker restart and forced container recreation both succeeded. A synthetic
+  text fixture in the bind mount retained the same SHA-256 checksum, verified
+  from inside the replacement container and on the host.
+- Container inspection confirmed healthy status, UID/GID 1000:1000, read-only
+  root filesystem and a port binding restricted to 127.0.0.1.
 
 ## Fixes during verification
 
@@ -40,16 +47,12 @@
 
 ## Not verified / not built
 
-Docker build, clean-clone Docker startup and container restart are pending access
-to the Docker daemon through the authorized sudo terminal. The original window
-was closed after installation. M0 is not marked complete until these pass.
-
 No organizer account, events, invitations, media ingestion, HEIC processing,
 gallery, database, backups, public deployment or real family photos yet.
 
 ## Next task
 
-Finish the Docker clean-start check, then start M1 with **secure local organizer
-bootstrap and login**, without default credentials. Keep all checks local.
+Start M1 with **secure local organizer bootstrap and login**, without default
+credentials. Keep all checks local.
 After private event access works, build one JPEG's complete upload → preview →
 download flow, then verify HEIC in the real container before bulk uploads.

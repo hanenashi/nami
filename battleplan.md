@@ -206,12 +206,12 @@ access explicitly; define duplicate-contribution/removal rules before deduplicat
 Backup design must coordinate the database snapshot with original files and GC.
 
 ### M0 — Bootstrap (first work order)
-- [ ] Inspect existing README/repo and actual environment; settle compatible dependency versions.
-- [ ] Scaffold web/API, minimal NAMI landing page and Fastify health route.
-- [ ] Docker Compose for local start; configurable persistent data directory; .env.example.
-- [ ] Comprehensive gitignore and safe sample fixtures, no real photographs.
-- [ ] README with copy-paste setup, ports, how to start/stop, test commands and data location.
-- [ ] Execute build/lint/test and start app locally; record results and commit.
+- [x] Inspect existing README/repo and actual environment; settle compatible dependency versions.
+- [x] Scaffold web/API, minimal NAMI landing page and Fastify health route.
+- [x] Docker Compose for local start; configurable persistent data directory; .env.example.
+- [x] Comprehensive gitignore and safe sample fixtures, no real photographs.
+- [x] README with copy-paste setup, ports, how to start/stop, test commands and data location.
+- [x] Execute build/lint/test and start app locally; record results and commit.
 
 **Exit:** clean clone runs without paid/external services and shows NAMI page.
 
