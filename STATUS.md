@@ -419,3 +419,32 @@ only accepted format now.
   actor/session/event/access/invitation/media/upload counts match the snapshot
   (3/4/1/1/0/4/0), all four original hashes match, and no guest link was
   replaced on live data.
+
+## Superadmin owner-controls increment
+
+- Added a separate superadmin passphrase and session cookie. It is not an actor
+  and cannot impersonate the organizer or guests. The credential has no default
+  value and is set or rotated through an interactive host command; old
+  superadmin sessions are invalidated. Setup verifies a private SQLite backup.
+- The private `/superadmin` page lists every organizer/member/guest actor, event
+  access, photo count and active sessions. It can sign out any actor, disable a
+  guest's invitations and access while retaining the actor/photos, and reset
+  the organizer passphrase using the existing backed-up reset routine.
+- API tests cover separate login, role isolation, same-origin checks, guest
+  sign-out/disable, organizer recovery, credential rotation and preservation of
+  events/actors. Browser tests exercise the page on desktop Chromium and
+  iPad/iPhone WebKit. A disposable pseudo-terminal test caught and fixed a
+  prompt race that could echo a very fast paste; the final run confirmed no
+  echo and a valid SQLite backup.
+- Full checks passed: 11 API tests and 15 browser tests. The service was stopped
+  and the live data snapshotted at `../nami-backups/pre-superadmin-20261019-2307`;
+  nine active files matched SHA-256, all four original photo hashes matched,
+  SQLite integrity/foreign keys passed, and a disposable restore with the new
+  schema stayed healthy with protected row counts unchanged.
+- The rebuilt Beechan container is healthy and still bound only to
+  `127.0.0.1:3000`. Live counts after migration match the snapshot: 4 actors,
+  7 sessions, 1 event, 1 event-access row, 3 invitations, 4 media rows, and no
+  unfinished uploads. The new superadmin tables are empty, the people API
+  denies unauthenticated access, and the Pixel's existing private tunnel
+  reaches `/superadmin`. The real superadmin passphrase has deliberately not
+  been set; the owner must choose it in an interactive Beechan terminal.

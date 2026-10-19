@@ -57,6 +57,16 @@ export type NamiMedia = {
   downloadPath: string;
 };
 
+export type SuperadminPerson = {
+  id: string;
+  kind: 'organizer' | 'guest' | 'member';
+  displayName: string;
+  createdAt: number;
+  sessions: number;
+  photos: number;
+  events: { id: string; title: string; role: 'organizer' | 'contributor' | 'viewer' }[];
+};
+
 async function readJson<T extends object>(response: Response): Promise<T> {
   const body = await response.json() as T | { error?: string };
   if (!response.ok) {
@@ -88,6 +98,41 @@ export async function loginOrganizer(password: string) {
 export async function logoutOrganizer() {
   const response = await fetch('/api/auth/logout', { method: 'POST' });
   if (!response.ok) throw new Error('Couldn’t sign out. Please try again.');
+}
+
+export async function getSuperadminStatus() {
+  return readJson<{ configured: boolean; authenticated: boolean }>(await fetch('/api/superadmin/status', { cache: 'no-store' }));
+}
+
+export async function loginSuperadmin(password: string) {
+  return readJson<{ authenticated: true }>(await fetch('/api/superadmin/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }),
+  }));
+}
+
+export async function logoutSuperadmin() {
+  const response = await fetch('/api/superadmin/logout', { method: 'POST' });
+  if (!response.ok) await readJson(response);
+}
+
+export async function getSuperadminPeople() {
+  return readJson<{ people: SuperadminPerson[] }>(await fetch('/api/superadmin/people', { cache: 'no-store' }));
+}
+
+export async function signOutPerson(actorId: string) {
+  const response = await fetch(`/api/superadmin/people/${encodeURIComponent(actorId)}/signout`, { method: 'POST' });
+  if (!response.ok) await readJson(response);
+}
+
+export async function disableGuest(actorId: string) {
+  const response = await fetch(`/api/superadmin/people/${encodeURIComponent(actorId)}/disable`, { method: 'POST' });
+  if (!response.ok) await readJson(response);
+}
+
+export async function resetOrganizerFromSuperadmin(password: string) {
+  return readJson<{ reset: true; backupCreated: true }>(await fetch('/api/superadmin/organizer/reset', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }),
+  }));
 }
 
 export async function getEvents() {

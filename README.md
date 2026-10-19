@@ -75,6 +75,36 @@ the new passphrase afterward. This same-host database backup is a rollback aid,
 not a full photo backup or off-host disaster recovery. There is deliberately no
 unauthenticated web reset route or default recovery password.
 
+### Superadmin owner controls
+
+NAMI also has a separate, private superadmin login for account recovery and
+people management. It has **no default passphrase**. Set or rotate its
+passphrase from an interactive Beechan terminal once after NAMI starts:
+
+```sh
+cd /home/beechan/GIT/nami
+docker compose exec nami node apps/api/dist/superadmin-setup.js
+```
+
+The prompt does not echo the passphrase or accept it as a command argument. It
+verifies a private SQLite backup before changing the superadmin credential and
+signs out earlier superadmin sessions. Store this separate passphrase in a
+password manager. If it is lost too, rerun the host command to rotate it.
+
+After setup, open **http://127.0.0.1:3000/superadmin** on Beechan or
+**http://127.0.0.1:33000/superadmin** on the Pixel while its SSH tunnel is open.
+The page lists the organizer and redeemed guests, their current event access,
+photo counts and active sessions. It can sign out a person on every device,
+disable a guest's invitations/access without deleting their photos, and reset
+the organizer passphrase after making a SQLite backup. The superadmin cannot
+silently sign in as another person. A disabled guest can later receive a
+replacement link from the organizer's People & invitations panel.
+
+The superadmin login is independent of the organizer login, with its own
+hashed passphrase and session cookie. The page remains on NAMI's loopback-only
+service; knowing its URL does not grant access. There is no remote access to it
+from iPad/iPhone until a separate private network deployment is approved.
+
 For the current private Pixel test, keep this SSH tunnel open in Termux:
 
 ```sh
@@ -188,6 +218,8 @@ iPad/iPhone device settings, including organizer setup, logout, repeat login,
 creating and reopening an event, guest redemption, repeat access and revocation.
 They also cover replacement links, old-session invalidation, and preserved guest
 identity after recovery.
+Superadmin API and browser tests cover separate login, people listing, session
+sign-out, guest disabling, and organizer recovery on disposable data.
 They also cover organizer photo selection/removal and double-confirmed event
 deletion using disposable generated JPEGs.
 The contributor flow also uploads a generated JPEG and displays its preview on

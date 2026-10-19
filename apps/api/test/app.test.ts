@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import sharp from 'sharp';
 import { resetOrganizerPassphrase } from '../src/admin-reset.js';
+import { setSuperadminPassphrase } from '../src/superadmin.js';
 import { buildApp, dataDirectories } from '../src/app.js';
 import { openDatabase } from '../src/database.js';
 
@@ -193,6 +194,102 @@ test('host-only organizer reset backs up SQLite and preserves event and guest ac
   assert.equal((await app.inject({ method: 'POST', url: '/api/auth/login', headers: origin,
     payload: { password: 'replacement test passphrase' } })).statusCode, 200);
   await assert.rejects(resetOrganizerPassphrase(join(root, 'missing'), 'replacement test passphrase'), /database not found/);
+});
+
+test('superadmin independently manages people and recovers the organizer', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'nami-superadmin-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const dataRoot = join(root, 'data');
+  const webRoot = join(root, 'web');
+  await mkdir(webRoot);
+  await writeFile(join(webRoot, 'index.html'), '<title>NAMI fixture</title>');
+  const app = await buildApp({ dataRoot, webRoot });
+  t.after(() => app.close());
+  const origin = { host: 'nami.test', origin: 'http://nami.test' };
+  const adminUrl = '/api/superadmin';
+  assert.deepEqual((await app.inject(`${adminUrl}/status`)).json(), { configured: false, authenticated: false });
+  assert.equal((await app.inject(`${adminUrl}/people`)).statusCode, 401);
+  assert.equal((await app.inject({ method: 'POST', url: `${adminUrl}/login`, headers: origin,
+    payload: { password: 'unconfigured passphrase' } })).statusCode, 401);
+  const firstBackup = await setSuperadminPassphrase(dataRoot, 'private owner test passphrase');
+  assert.equal((await stat(firstBackup)).mode & 0o777, 0o600);
+  assert.deepEqual((await app.inject(`${adminUrl}/status`)).json(), { configured: true, authenticated: false });
+  assert.equal((await app.inject({ method: 'POST', url: `${adminUrl}/login`,
+    headers: { host: 'nami.test', origin: 'http://other.test' },
+    payload: { password: 'private owner test passphrase' } })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'POST', url: `${adminUrl}/login`, headers: origin,
+    payload: { password: 'a wrong owner passphrase' } })).statusCode, 401);
+  const signedIn = await app.inject({ method: 'POST', url: `${adminUrl}/login`, headers: origin,
+    payload: { password: 'private owner test passphrase' } });
+  assert.equal(signedIn.statusCode, 200);
+  assert.match(String(signedIn.headers['set-cookie']), /HttpOnly/i);
+  assert.match(String(signedIn.headers['set-cookie']), /SameSite=Strict/i);
+  const adminCookie = String(signedIn.headers['set-cookie']).split(';', 1)[0];
+  const adminHeaders = { ...origin, cookie: adminCookie };
+  assert.equal((await app.inject({ url: `${adminUrl}/people`, headers: { cookie: adminCookie } })).statusCode, 200);
+  assert.equal((await app.inject({ url: '/api/events', headers: { cookie: adminCookie } })).statusCode, 401);
+
+  const setup = await app.inject({ method: 'POST', url: '/api/auth/setup', headers: origin,
+    payload: { displayName: 'Organizer', password: 'initial organizer passphrase' } });
+  const organizerCookie = String(setup.headers['set-cookie']).split(';', 1)[0];
+  const organizerHeaders = { ...origin, cookie: organizerCookie };
+  assert.equal((await app.inject({ url: `${adminUrl}/people`, headers: { cookie: organizerCookie } })).statusCode, 401);
+  const event = await app.inject({ method: 'POST', url: '/api/events', headers: organizerHeaders,
+    payload: { title: 'Kept family event', startDate: '2026-10-19' } });
+  const eventId = event.json().event.id as string;
+  const invite = await app.inject({ method: 'POST', url: `/api/events/${eventId}/invitations`,
+    headers: organizerHeaders, payload: { role: 'contributor' } });
+  const inviteSecret = (invite.json().invitePath as string).split('/').at(-1)!;
+  const guest = await app.inject({ method: 'POST', url: `/api/invitations/${inviteSecret}/redeem`,
+    headers: origin, payload: { nickname: 'Aunt May' } });
+  const guestCookie = String(guest.headers['set-cookie']).split(';', 1)[0];
+  const people = (await app.inject({ url: `${adminUrl}/people`, headers: adminHeaders })).json().people as
+    { id: string; kind: string; displayName: string; events: { title: string }[] }[];
+  assert.deepEqual(people.map(person => person.kind), ['organizer', 'guest']);
+  assert.equal(people[1].displayName, 'Aunt May');
+  assert.equal(people[1].events[0].title, 'Kept family event');
+  const guestId = people[1].id;
+  assert.equal((await app.inject({ method: 'POST', url: `${adminUrl}/people/${guestId}/disable`,
+    headers: organizerHeaders })).statusCode, 401);
+  assert.equal((await app.inject({ method: 'POST', url: `${adminUrl}/people/${people[0].id}/disable`,
+    headers: adminHeaders })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'POST', url: `${adminUrl}/people/${guestId}/disable`,
+    headers: { ...adminHeaders, origin: 'http://other.test' } })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'POST', url: `${adminUrl}/people/${guestId}/signout`,
+    headers: adminHeaders })).statusCode, 204);
+  assert.equal((await app.inject({ url: `/api/events/${eventId}`, headers: { cookie: guestCookie } })).statusCode, 401);
+  const secondGuestSession = await app.inject({ method: 'POST', url: `/api/invitations/${inviteSecret}/redeem`,
+    headers: origin, payload: {} });
+  const secondGuestCookie = String(secondGuestSession.headers['set-cookie']).split(';', 1)[0];
+  assert.equal((await app.inject({ method: 'POST', url: `${adminUrl}/people/${guestId}/disable`,
+    headers: adminHeaders })).statusCode, 204);
+  assert.equal((await app.inject({ url: `/api/events/${eventId}`, headers: { cookie: secondGuestCookie } })).statusCode, 401);
+  assert.equal((await app.inject(`/api/invitations/${inviteSecret}`)).statusCode, 410);
+  const database = new Database(join(dataRoot, 'db', 'nami.sqlite'), { readonly: true });
+  assert.equal((database.prepare('SELECT count(*) AS n FROM actors WHERE id = ?').get(guestId) as { n: number }).n, 1);
+  assert.equal((database.prepare('SELECT count(*) AS n FROM events WHERE id = ?').get(eventId) as { n: number }).n, 1);
+  database.close();
+
+  const reset = await app.inject({ method: 'POST', url: `${adminUrl}/organizer/reset`, headers: adminHeaders,
+    payload: { password: 'replacement organizer passphrase' } });
+  assert.equal(reset.statusCode, 200);
+  assert.deepEqual(reset.json(), { reset: true, backupCreated: true });
+  assert.equal((await app.inject({ url: '/api/auth/status', headers: { cookie: organizerCookie } })).json().authenticated, false);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/auth/login', headers: origin,
+    payload: { password: 'initial organizer passphrase' } })).statusCode, 401);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/auth/login', headers: origin,
+    payload: { password: 'replacement organizer passphrase' } })).statusCode, 200);
+  assert.equal((await app.inject({ url: `${adminUrl}/people`, headers: adminHeaders })).statusCode, 200);
+  assert.equal((await readdir(join(dataRoot, 'backups'))).filter(name => name.endsWith('.sqlite')).length, 2);
+
+  await setSuperadminPassphrase(dataRoot, 'rotated owner test passphrase');
+  const restarted = await buildApp({ dataRoot, webRoot });
+  t.after(() => restarted.close());
+  assert.equal((await restarted.inject({ url: `${adminUrl}/people`, headers: adminHeaders })).statusCode, 401);
+  assert.equal((await restarted.inject({ method: 'POST', url: `${adminUrl}/login`, headers: origin,
+    payload: { password: 'private owner test passphrase' } })).statusCode, 401);
+  assert.equal((await restarted.inject({ method: 'POST', url: `${adminUrl}/login`, headers: origin,
+    payload: { password: 'rotated owner test passphrase' } })).statusCode, 200);
 });
 
 test('organizer event access is enforced and events persist', async (t) => {

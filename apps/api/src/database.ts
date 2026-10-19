@@ -149,6 +149,20 @@ export function openDatabase(dataRoot: string): NamiDatabase {
     CREATE INDEX IF NOT EXISTS uploads_by_actor ON upload_sessions (actor_id);
 
     CREATE INDEX IF NOT EXISTS media_by_event ON media (event_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS superadmin (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      password_hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS superadmin_sessions (
+      token_hash TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS superadmin_sessions_by_expiry ON superadmin_sessions (expires_at);
   `);
   return database;
 }

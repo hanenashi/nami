@@ -238,6 +238,10 @@ Backup design must coordinate the database snapshot with original files and GC.
 - [x] Secure organizer bootstrap and local login/session.
 - [x] Host-only organizer passphrase reset with verified SQLite backup and
   organizer-session invalidation; no public recovery endpoint.
+- [x] Separate superadmin credential bootstrapped or rotated from the host,
+  with a private browser dashboard for all actors, active access/session review,
+  guest disable/sign-out and backed-up organizer passphrase recovery. It has no
+  default credential and does not impersonate guests.
 - [x] Organizer-initiated guest link replacement after loss, expiry or revocation:
   retire old links/sessions, preserve the guest actor and photo attribution,
   require an explicit confirmation, and warn that the new bearer link signs in

@@ -56,10 +56,9 @@ export async function resetOrganizerPassphrase(dataRoot: string, passphrase: str
   } finally { database.close(); }
 }
 
-function readHidden(prompt: string): Promise<string> {
+export function readHidden(prompt: string): Promise<string> {
   return new Promise((resolveInput, rejectInput) => {
     let value = '';
-    process.stdout.write(prompt);
     process.stdin.setRawMode(true);
     const finish = (error?: Error) => {
       process.stdin.removeListener('keypress', onKey);
@@ -77,6 +76,7 @@ function readHidden(prompt: string): Promise<string> {
     };
     process.stdin.on('keypress', onKey);
     process.stdin.resume();
+    process.stdout.write(prompt);
   });
 }
 

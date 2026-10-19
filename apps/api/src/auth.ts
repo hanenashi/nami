@@ -63,7 +63,7 @@ export async function hashOrganizerPassword(password: string) {
   return ['scrypt', SCRYPT_N, SCRYPT_R, SCRYPT_P, salt.toString('base64url'), key.toString('base64url')].join('$');
 }
 
-async function verifyPassword(password: string, encoded: string) {
+export async function verifyPassword(password: string, encoded: string) {
   const [algorithm, n, r, p, salt, expected] = encoded.split('$');
   if (algorithm !== 'scrypt' || !n || !r || !p || !salt || !expected) return false;
   const expectedBuffer = Buffer.from(expected, 'base64url');

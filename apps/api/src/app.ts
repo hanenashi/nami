@@ -9,6 +9,7 @@ import { registerEvents } from './events.js';
 import { registerInvitations } from './invitations.js';
 import { registerUploads } from './uploads.js';
 import { registerMedia } from './media.js';
+import { registerSuperadmin } from './superadmin.js';
 
 export const dataDirectories = ['db', 'staging', 'uploads', 'originals', 'previews', 'backups'] as const;
 
@@ -38,12 +39,17 @@ export async function buildApp(options: { dataRoot: string; webRoot: string; log
     return { status: 'ok', service: 'nami' };
   });
   await registerAuth(app, database, options.secureCookies ?? false);
+  registerSuperadmin(app, database, options.dataRoot, options.secureCookies ?? false);
   registerEvents(app, database, options.dataRoot, options.secureCookies ?? false);
   registerInvitations(app, database, options.secureCookies ?? false);
   await registerMedia(app, database, options.dataRoot, options.secureCookies ?? false);
   await registerUploads(app, database, options.dataRoot, options.secureCookies ?? false);
   await app.register(fastifyStatic, { root: options.webRoot, dotfiles: 'deny' });
   app.get('/organizer', async (_request, reply) => reply.sendFile('index.html'));
+  app.get('/superadmin', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return reply.sendFile('index.html', { cacheControl: false });
+  });
   app.get('/organizer/events/:eventId', async (_request, reply) => reply.sendFile('index.html'));
   app.get('/invite/:secret', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');

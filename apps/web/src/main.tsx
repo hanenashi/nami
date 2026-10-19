@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { copy } from './copy.js';
 import { Organizer } from './Organizer.js';
 import { GuestEvent, InvitationPage } from './Invitation.js';
+import { Superadmin } from './Superadmin.js';
 import './styles.css';
 
 function Shell({ children, album = false }: { children: React.ReactNode; album?: boolean }) {
@@ -50,6 +51,7 @@ function Welcome() {
 }
 
 function App() {
+  if (location.pathname === '/superadmin') return <Shell><Superadmin /></Shell>;
   if (location.pathname === '/organizer' || location.pathname.startsWith('/organizer/events/')) {
     return <Shell album={location.pathname.startsWith('/organizer/events/')}><Organizer /></Shell>;
   }
