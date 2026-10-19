@@ -405,14 +405,24 @@ function EventDetail({ eventId }: { eventId: string }) {
   if (!event || !invitations || !media) return <p className="page-message">Opening event…</p>;
 
   return (
-    <article className="event-detail">
-      <a className="back-link" href="/organizer">← Your events</a>
-      <p className="section-label">Event</p>
-      <h1>{event.title}</h1>
-      <p className="event-date">{formatEventDates(event)}</p>
-      {event.description ? <p className="event-description">{event.description}</p> : null}
+    <article className="event-detail event-album">
+      <header className="album-header">
+        <div className="album-header-top">
+          <a className="album-back" href="/organizer">← Your events</a>
+          <a className="album-invite-link" href="#album-invitations" onClick={() => {
+            const panel = document.getElementById('album-invitations') as HTMLDetailsElement | null;
+            if (panel) panel.open = true;
+          }}>Invite people</a>
+        </div>
+        <h1>{event.title}</h1>
+        <p className="event-date">{formatEventDates(event)}</p>
+        {event.description ? <p className="event-description">{event.description}</p> : null}
+      </header>
       <EventPhotos eventId={event.id} role="organizer" initialMedia={media} />
-      <InvitationsPanel eventId={event.id} initialInvitations={invitations} />
+      <details className="album-invitations" id="album-invitations">
+        <summary>People &amp; invitations</summary>
+        <InvitationsPanel eventId={event.id} initialInvitations={invitations} />
+      </details>
     </article>
   );
 }

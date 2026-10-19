@@ -5,9 +5,9 @@ import { Organizer } from './Organizer.js';
 import { GuestEvent, InvitationPage } from './Invitation.js';
 import './styles.css';
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, album = false }: { children: React.ReactNode; album?: boolean }) {
   return (
-    <div className="page">
+    <div className={album ? 'page page-album' : 'page'}>
       <header className="masthead">
         <a className="wordmark" href="/">{copy.brand}</a>
         <span className="subtitle" lang="cs">{copy.subtitle}</span>
@@ -51,12 +51,12 @@ function Welcome() {
 
 function App() {
   if (location.pathname === '/organizer' || location.pathname.startsWith('/organizer/events/')) {
-    return <Shell><Organizer /></Shell>;
+    return <Shell album={location.pathname.startsWith('/organizer/events/')}><Organizer /></Shell>;
   }
   const invitationMatch = /^\/invite\/([^/]+)$/.exec(location.pathname);
   if (invitationMatch) return <Shell><InvitationPage secret={invitationMatch[1]} /></Shell>;
   const eventMatch = /^\/events\/([^/]+)$/.exec(location.pathname);
-  if (eventMatch) return <Shell><GuestEvent eventId={eventMatch[1]} /></Shell>;
+  if (eventMatch) return <Shell album><GuestEvent eventId={eventMatch[1]} /></Shell>;
   return <Welcome />;
 }
 

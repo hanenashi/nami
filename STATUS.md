@@ -1,7 +1,7 @@
 # NAMI status
 
-2026-10-19 — M0 and M1 complete. Private events and scoped invitations work,
-and the first complete JPEG path now runs locally. A basic resumable JPEG batch queue now works.
+2026-10-19 — M0 and M1 complete. Private events, invitations and the JPEG
+gallery work. Resumable JPEG batches and the album-first interface run locally.
 
 ## Working locally
 
@@ -26,6 +26,10 @@ and the first complete JPEG path now runs locally. A basic resumable JPEG batch 
   metadata-stripped preview, attribution and authorized original download.
 - Viewer gallery access with server-side denial of viewer uploads and all
   cross-event media operations.
+- Album-first organizer/guest event screens with one immediate multi-JPEG Add
+  photos picker, square responsive grid, compact progress and secondary invite
+  controls. A full-screen viewer supports swipe, pinch/double-tap zoom,
+  keyboard navigation and original download.
 
 ## Verified
 
@@ -136,8 +140,8 @@ and the first complete JPEG path now runs locally. A basic resumable JPEG batch 
 
 ## Not verified / not built
 
-No HEIC/video processing, gallery lightbox,
-scheduled backup/restore tooling or public deployment yet. Crash
+No HEIC/video processing, scheduled backup/restore tooling or public deployment
+yet. Crash
 reconciliation for orphaned staging/files is still pending. No physical
 iPad/iPhone event-flow test yet. Current SSH-loopback invitation links work only
 on the tunneled Pixel, not on relatives' devices.
@@ -160,26 +164,39 @@ root now, a replaceable storage implementation for optional cloud storage later.
 Extract only boundaries needed by the next feature; avoid speculative frameworks,
 cloud dependencies or broad abstractions.
 
-## Next task
+## Album UX pass
 
-Begin the mobile-first album redesign before more backend work. The user supplied
+The user supplied
 `/storage/emulated/0/Documents/codex/NAMI mobile photo-sharing UX research.pdf`
 on the Pixel (22 pages). It recommends progressive disclosure: photos and one
 Add photos control first; upload machinery and organizer administration behind
-secondary controls. A synthetic iPhone WebKit screenshot of the current page
-confirmed the gallery is pushed below two large upload forms and a tall header.
+secondary controls. A synthetic iPhone WebKit screenshot of the old page
+confirmed the gallery was pushed below two large upload forms and a tall header.
 The local visual reference is `docs/design/album-mobile-concept.png`; it is a
 concept only and contains synthetic imagery, not product assets.
 
-Implement in tested steps: (1) unify the file picker while retaining the current
-resumable client, compact organizer/guest event headers, collapse organizer
-invitations and render a cropped three-column mobile grid; (2) add a full-screen
-viewer with swipe, zoom, keyboard and accessible close/focus return; (3) reduce
-invitation friction and make upload progress quiet. Keep exact originals and
-existing API/data unchanged. Check desktop Chromium, iPad/iPhone WebKit,
-320px narrow screens and real Pixel touch. Use disposable data for screenshots.
-No redesign code has been changed or deployed yet.
+The current frontend retains the resumable client and existing APIs/data. The
+organizer and guest pages now place a compact header and one picker above a
+three-column phone grid. Organizer invitation history and revocation are in a
+secondary disclosure, reachable through Invite people. The viewer shows only
+attribution and original download outside the image; Escape, arrow keys and
+touch gestures navigate and zoom. Upload progress stays small, expands for
+details and disappears after success. Returning invitees still use the existing
+one-tap Continue as name flow; broader invitation copy polish remains open.
 
+Browser tests use disposable generated JPEGs. `npm run check` passed all 8 API
+tests and `npm run test:e2e` passed all 12 desktop Chromium and iPad/iPhone
+WebKit flows after the redesign. They cover the native file chooser tap, viewer
+keyboard navigation, iPhone synthetic swipe/double-tap, focus return, invite
+revocation and no horizontal overflow at 320px. iPhone/iPad album and iPhone
+viewer screenshots were visually inspected. The tap test caught and fixed an
+invisible file input that did not respond to mobile WebKit label taps. Physical
+Pixel touch, long batches and real photographs remain to check.
+
+## Next task
+
+Test the album on the real Pixel and ask the iPad/iPhone testers for UX feedback
+before family invitations.
 After UX, return to M2 quota/ledger work, browser interruption/large-batch
 checks and HEIC decoder probing. JPEG remains the only accepted format now.
 
@@ -242,3 +259,17 @@ checks and HEIC decoder probing. JPEG remains the only accepted format now.
   sequence, checked each original byte-for-byte, and left no staging sessions.
   This checks backend throughput and slot reuse; 100-file browser interaction
   and long-running mobile behavior still need testing.
+
+## Album deployment and recovery check
+
+- Built the frontend-only image without touching the running instance. The
+  container was then stopped for a full active-data backup at
+  `../nami-backups/pre-album-20261019` (private mode 0700; files 0600), with a
+  SHA-256 manifest. A disposable restore started the current API and passed
+  SQLite integrity and foreign-key checks. There was no schema change.
+- Before and after deployment, the live and restored data matched the snapshot:
+  3 actors, 6 sessions, 2 events, 4 event-access rows, 3 invitations, 7 media
+  rows and no staged uploads. The 15 snapshot files matched their copy hashes;
+  live originals and previews matched the manifest. The image is healthy and
+  bound only to `127.0.0.1:3000`; the new built assets are served. This is a
+  same-host backup, not an off-host disaster-recovery setup.

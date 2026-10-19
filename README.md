@@ -12,11 +12,13 @@ one gathering. The first testers use an iPad and iPhone; simple screens and
 Safari compatibility come first.
 
 Milestone **M1, private events and invitations, is complete**, along with the
-first complete photo path. An organizer or invited contributor can add one JPEG
-at a time; NAMI preserves its exact bytes, makes a separate preview, shows who
-shared it and provides an authorized original download. A simple sequential batch queue can now resume JPEG uploads after interruption
-when the same files are selected again. Other photo and video formats come next. NAMI is not ready for family photographs
-or internet traffic yet.
+first JPEG gallery path. Organizers and invited contributors use one Add photos
+action for one or many JPEGs. NAMI preserves their exact bytes, makes separate
+previews and shows a photo-first album with a full-screen viewer and authorized
+original downloads. Uploads proceed sequentially and can resume after an
+interruption when the same files are selected again. Other photo and video
+formats come later. NAMI is not ready for real family photographs or internet
+traffic yet.
 
 ## Start on Beechan
 
@@ -122,7 +124,7 @@ hashed with scrypt; session cookies are HttpOnly and their raw values are not
 stored in the database. Invitation secrets are also stored only as hashes. Each
 link grants one event role, remembers the first nickname used, and can be
 revoked by the organizer; anyone who receives the link can use that access until
-then. The current upload accepts one JPEG up to 25 MB, verifies the actual file,
+then. Each upload accepts one JPEG up to 25 MB, verifies the actual file,
 stores its SHA-256, and generates a metadata-stripped preview. Original downloads
 retain the exact uploaded bytes and may therefore retain EXIF/GPS. The same-disk
 `backups/` folder is not disaster recovery; backup/restore remains unimplemented
@@ -200,15 +202,17 @@ cloud dependencies or broad abstractions.
 - `battleplan.md`: product intent and milestones.
 - `STATUS.md`: verified progress, limits and the next concrete task.
 
-## Planned album redesign
+## Album interface
 
-A mobile-first interface pass is next, before family invitations. The research
+A mobile-first interface pass is in place before family invitations. The research
 PDF on the Pixel (`Documents/codex/NAMI mobile photo-sharing UX research.pdf`)
 and the saved [mobile concept](docs/design/album-mobile-concept.png) guide an
 album-first event view: one Add photos control, a compact header, a dense photo
-grid, a viewer and quieter organizer/progress controls. The concept uses
-synthetic images; the live interface has not changed yet. See `STATUS.md` for
-the implementation and test checklist.
+grid, a full-screen viewer and quieter organizer/progress controls. The concept
+uses synthetic images; the implemented interface uses the existing private
+gallery and upload APIs. Browser tests cover Chromium and WebKit device profiles;
+physical iPad/iPhone use still needs checking. See `STATUS.md` for verified work
+and remaining limits.
 
 ## Resumable upload groundwork
 
@@ -221,7 +225,7 @@ limited to 25 MiB each and ten sessions per actor (250 MiB maximum), and cannot
 be downloaded through this endpoint. DELETE frees a session's allocation.
 
 Completed resumable files are verified as JPEG, copied to immutable originals,
-previewed, and added to the same private gallery. The bulk picker transfers
+previewed, and added to the same private gallery. The Add photos picker transfers
 one file at a time with individual and total progress, pause, retry and cancel.
 A network interruption keeps the server offset; reselect the same files after a
 page reload to continue. Keep the page open during processing. Incomplete

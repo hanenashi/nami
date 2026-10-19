@@ -105,22 +105,14 @@ export function GuestEvent({ eventId }: { eventId: string }) {
 
   if (error && !event) return <p className="page-message" role="alert">{error}</p>;
   if (!event || !access || !media) return <p className="page-message">Opening event…</p>;
-  const accessMessage = access.role === 'contributor'
-    ? 'You can add photographs to this event.'
-    : access.role === 'viewer'
-      ? 'You have view-only access to this event.'
-      : 'You are organizing this event.';
-
   return (
-    <article className="event-detail guest-event">
-      <p className="section-label">Hello, {access.displayName}</p>
-      <h1>{event.title}</h1>
-      <p className="event-date">{formatEventDates(event)}</p>
-      {event.description ? <p className="event-description">{event.description}</p> : null}
-      <section className="event-coming-next" aria-labelledby="guest-access-heading">
-        <h2 id="guest-access-heading">You’re part of this event</h2>
-        <p>{accessMessage}</p>
-      </section>
+    <article className="event-detail guest-event event-album">
+      <header className="album-header">
+        <p className="album-greeting">Hello, {access.displayName}</p>
+        <h1>{event.title}</h1>
+        <p className="event-date">{formatEventDates(event)}</p>
+        {event.description ? <p className="event-description">{event.description}</p> : null}
+      </header>
       <EventPhotos eventId={event.id} role={access.role} initialMedia={media} />
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       <button className="text-button leave-event" type="button" onClick={leave} disabled={leaving}>

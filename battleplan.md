@@ -3,7 +3,7 @@
 > **NAMI / なみ / mezi námi** — memories made together.  
 > Repository: https://github.com/hanenashi/nami  
 > Existing README motto: **photo sharing done terribly right**  
-> State: planning / local-first MVP · Updated: 2026-10-18
+> State: local-first MVP in progress · Updated: 2026-10-19
 
 ## 0. Beechan / Codex handoff
 
@@ -268,18 +268,19 @@ The saved mobile design reference is `docs/design/album-mobile-concept.png`.
 Apply its album-first principle without adopting its larger storage, dedupe or
 worker redesign during this interface pass.
 
-- [ ] One prominent Add photos picker for one or many JPEGs; upload immediately
+- [x] One prominent Add photos picker for one or many JPEGs; upload immediately
   with the existing resumable client.
-- [ ] Compact event header and first-viewport gallery for organizers and guests;
+- [x] Compact event header and first-viewport gallery for organizers and guests;
   keep Invite discoverable and place history/revocation in a secondary panel.
-- [ ] Cropped square grid with three columns on phones and responsive wider
+- [x] Cropped square grid with three columns on phones and responsive wider
   layouts; preserve originals and private download access.
-- [ ] Full-screen viewer with swipe, pinch/double-tap zoom, keyboard navigation,
+- [x] Full-screen viewer with swipe, pinch/double-tap zoom, keyboard navigation,
   clear close, discreet attribution/download and focus/scroll restoration.
-- [ ] Compact progress that expands for active transfers/errors and clears after
+- [x] Compact progress that expands for active transfers/errors and clears after
   success. Be honest that mobile browser transfers need the page open.
-- [ ] Test desktop Chromium, iPad/iPhone WebKit, 320px layouts and real Pixel
-  touch with disposable photos; inspect screenshots and fix awkward layouts.
+- [x] Test desktop Chromium, iPad/iPhone WebKit and 320px layouts with disposable
+  photos; inspect screenshots and fix awkward layouts.
+- [ ] Test real Pixel touch and physical iPad/iPhone use before family invitations.
 
 **Exit:** a family member sees the album immediately and uses one clear action
 to add photos. Keep the service private and preserve live data during deployment.
