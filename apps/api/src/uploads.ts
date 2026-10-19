@@ -2,9 +2,10 @@ import { Server, Upload } from '@tus/server';
 import { FileStore, type Configstore } from '@tus/file-store';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
-import { mkdir, open, unlink } from 'node:fs/promises';
+import { mkdir, open, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { COOKIE_NAME, findSessionActor, requireActor, requireSameOrigin } from './auth.js';
+import { publishStagedJpeg, serializeMedia, UploadProblem } from './media.js';
 import type { NamiDatabase } from './database.js';
 
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -52,6 +53,7 @@ export async function registerUploads(app: FastifyInstance, db: NamiDatabase, da
     }
   }
   const store = new PrivateStore({ directory, configstore });
+  const finalizing = new Set<string>();
   // Fixed-length, empty creation only. No deferred allocation, concatenation,
   // public GET or expiry promise until lifecycle reconciliation is implemented.
   store.extensions = ['creation', 'termination'];
@@ -104,6 +106,66 @@ export async function registerUploads(app: FastifyInstance, db: NamiDatabase, da
         await server.handle(request.raw, reply.raw);
       },
     });
+    scope.post<{ Params: { eventId: string; uploadId: string }; Body: { originalName?: string } }>(
+      '/api/events/:eventId/uploads/:uploadId/finalize',
+      { onRequest: [requireSameOrigin(secure), requireActor(db)], bodyLimit: 1024,
+        schema: { body: { type: 'object', required: ['originalName'], additionalProperties: false,
+          properties: { originalName: { type: 'string', minLength: 1, maxLength: 255 } } } } },
+      async (request, reply) => {
+        reply.header('Cache-Control', 'no-store');
+        const { eventId, uploadId } = request.params;
+        const actorId = request.namiActor!.id;
+        const role = db.prepare('SELECT role FROM event_access WHERE actor_id = ? AND event_id = ?')
+          .get(actorId, eventId) as { role: string } | undefined;
+        if (!role) return reply.code(404).send({ error: 'Upload not found.' });
+        if (role.role === 'viewer') return reply.code(403).send({ error: 'This invitation cannot upload photos.' });
+        if (!new RegExp(`^${uuid}$`).test(eventId) || !new RegExp(`^${uuid}$`).test(uploadId)) {
+          return reply.code(404).send({ error: 'Upload not found.' });
+        }
+        const existing = db.prepare('SELECT id, event_id, uploaded_by FROM media WHERE id = ?')
+          .get(uploadId) as { id: string; event_id: string; uploaded_by: string } | undefined;
+        if (existing && existing.event_id === eventId && existing.uploaded_by === actorId) {
+          const media = db.prepare(`SELECT media.id, media.event_id, media.original_name,
+            media.size_bytes, media.width, media.height, media.preview_width,
+            media.preview_height, media.preview_size_bytes, media.created_at,
+            actors.display_name AS uploader_name FROM media
+            JOIN actors ON actors.id = media.uploaded_by WHERE media.id = ?`).get(uploadId);
+          db.prepare('DELETE FROM upload_sessions WHERE id = ?').run(uploadId);
+          await unlink(join(directory, uploadId)).catch(() => {});
+          return reply.code(200).send({ media: serializeMedia(media as Parameters<typeof serializeMedia>[0]) });
+        }
+        const session = get(uploadId);
+        if (!session || session.actor_id !== actorId || session.event_id !== eventId) {
+          return reply.code(404).send({ error: 'Upload not found.' });
+        }
+        if (finalizing.has(uploadId)) return reply.code(409).send({ error: 'This photo is already being processed.' });
+        const expected = new Upload(JSON.parse(session.metadata)).size;
+        const path = join(directory, uploadId);
+        let size;
+        try { size = (await stat(path)).size; }
+        catch { return reply.code(409).send({ error: 'The upload file is missing.' }); }
+        if (size !== expected) return reply.code(409).send({ error: 'Finish uploading before adding this photo.' });
+        finalizing.add(uploadId);
+        try {
+          const media = await publishStagedJpeg({
+            database: db, dataRoot, mediaId: uploadId, stagingPath: path,
+            eventId, actorId, originalName: request.body.originalName!,
+            stillAuthorized: () => {
+              const current = findSessionActor(db, request.cookies[COOKIE_NAME]);
+              const access = current && db.prepare('SELECT role FROM event_access WHERE actor_id = ? AND event_id = ?')
+                .get(current.id, eventId) as { role: string } | undefined;
+              return Boolean(current && current.id === actorId && access && access.role !== 'viewer');
+            },
+          });
+          db.prepare('DELETE FROM upload_sessions WHERE id = ?').run(uploadId);
+          await unlink(path).catch(() => {});
+          return reply.code(201).send({ media });
+        } catch (error) {
+          if (error instanceof UploadProblem) return reply.code(error.statusCode).send({ error: error.message });
+          throw error;
+        } finally { finalizing.delete(uploadId); }
+      },
+    );
     scope.route({
       method: ['HEAD', 'PATCH', 'DELETE'], url: '/api/events/:eventId/uploads/:uploadId',
       onRequest: [async (request, reply) => {

@@ -7,6 +7,7 @@ import { mkdtemp, mkdir, writeFile, readFile, stat, readdir, rm } from 'node:fs/
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
+import sharp from 'sharp';
 import { buildApp } from '../src/app.js';
 
 test('Tus ownership, limits, cancellation and byte-exact resume across API restart', async (t) => {
@@ -42,7 +43,7 @@ test('Tus ownership, limits, cancellation and byte-exact resume across API resta
   const call = (path: string, method: string, actor = 1, headers: Record<string, string> = {}, body?: string) => fetch(`${base}${path}`, {
     method, headers: { origin: base, cookie: cookies[actor], 'Tus-Resumable': '1.0.0', ...headers }, body,
   });
-  const create = () => call(collection, 'POST', 1, { 'Upload-Length': '11' });
+  const create = (size = 11) => call(collection, 'POST', 1, { 'Upload-Length': String(size) });
   const created = await create();
   assert.equal(created.status, 201, await created.text());
   const location = created.headers.get('location')!;
@@ -104,5 +105,42 @@ test('Tus ownership, limits, cancellation and byte-exact resume across API resta
   assert.equal((await readdir(join(dataRoot, 'uploads'))).length, 10);
   for (const path of locations) assert.equal((await call(path, 'DELETE')).status, 204);
   assert.deepEqual(await readdir(join(dataRoot, 'uploads')), []);
+  const jpeg = await sharp({ create: { width: 10, height: 8, channels: 3, background: '#bcbcbc' } }).jpeg().toBuffer();
+  const jpegCreate = await create(jpeg.length);
+  assert.equal(jpegCreate.status, 201);
+  const jpegLocation = jpegCreate.headers.get('location')!;
+  const jpegId = jpegLocation.split('/').at(-1)!;
+  const jpegPatch = await fetch(`${base}${jpegLocation}`, { method: 'PATCH',
+    headers: { origin: base, cookie: cookies[1], 'Tus-Resumable': '1.0.0',
+      'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': '0' }, body: jpeg });
+  assert.equal(jpegPatch.status, 204);
+  await app.close();
+  app = await buildApp({ dataRoot, webRoot });
+  base = await app.listen({ host: '127.0.0.1', port: 0 });
+  const finalize = (path: string, actor = 1) => call(`${path}/finalize`, 'POST', actor,
+    { 'Content-Type': 'application/json' }, JSON.stringify({ originalName: 'family.jpg' }));
+  assert.equal((await finalize(jpegLocation, 2)).status, 404);
+  // Simulate a crash after beginning a copy and before the media row exists.
+  await writeFile(join(dataRoot, 'originals', `${jpegId}.jpg`), 'partial');
+  await writeFile(join(dataRoot, 'previews', `${jpegId}.jpg`), 'stale preview');
+  const published = await finalize(jpegLocation);
+  assert.equal(published.status, 201);
+  const media = (await published.json()).media;
+  assert.equal(media.id, jpegId);
+  assert.equal(media.originalName, 'family.jpg');
+  assert.equal((await finalize(jpegLocation)).status, 200);
+  assert.deepEqual(await readFile(join(dataRoot, 'originals', `${jpegId}.jpg`)), jpeg);
+  assert.equal((await readdir(join(dataRoot, 'previews'))).length, 1);
+  assert.equal((await readdir(join(dataRoot, 'uploads'))).length, 0);
+  assert.equal((db.prepare('SELECT count(*) AS count FROM media').get() as { count: number }).count, 1);
+  const listed = await call(`/api/events/${event}/media`, 'GET');
+  assert.equal(listed.status, 200);
+  assert.equal((await listed.json()).media[0].id, jpegId);
+  const invalid = await create(11);
+  const invalidLocation = invalid.headers.get('location')!;
+  assert.equal((await call(invalidLocation, 'PATCH', 1,
+    { 'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': '0' }, 'hello world')).status, 204);
+  assert.equal((await finalize(invalidLocation)).status, 415);
+  assert.equal((await call(invalidLocation, 'DELETE')).status, 204);
   assert.deepEqual(db.pragma('foreign_key_check'), []);
 });

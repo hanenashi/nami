@@ -115,6 +115,14 @@ button:disabled { cursor: wait; opacity: .65; }
 .file-choice input { width: 100%; min-width: 0; max-width: 100%; min-height: 52px; overflow: hidden; border: 1px solid #81958e; padding: 7px; color: #17342c; background: #fff; font: inherit; font-size: 16px; }
 .file-choice input::file-selector-button { min-height: 36px; margin-right: 12px; border: 0; padding-inline: 14px; color: #fff; background: #203e36; font: inherit; font-weight: 600; cursor: pointer; }
 .file-choice input:focus-visible { outline: 3px solid #203e36; outline-offset: 3px; }
+.batch-upload { margin-top: -24px; }
+.batch-upload .secondary-button { justify-self: start; }
+.batch-list { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.batch-list li { display: grid; gap: 8px; min-width: 0; padding-block: 12px; border-top: 1px solid var(--line); }
+.batch-list li > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 18px; overflow-wrap: anywhere; }
+.batch-list li > div span { color: #566a63; }
+.batch-list progress { width: 100%; accent-color: #203e36; }
+.batch-list button { justify-self: start; min-height: 40px; }
 .photo-upload small, .viewer-note, .empty-gallery { color: #566a63; font-size: 16px; line-height: 1.6; }
 .viewer-note { margin: 0 0 34px; }
 .empty-gallery { margin: 0; border-block: 1px solid var(--line); padding-block: 26px; }

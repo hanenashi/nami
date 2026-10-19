@@ -67,6 +67,13 @@ test('a contributor joins, shares one JPEG, and loses access when revoked', asyn
   await guestPage.getByRole('button', { name: 'Add photo' }).click();
   await expect(guestPage.getByRole('img', { name: 'Shared by Aunt May' })).toBeVisible();
   await expect(guestPage.getByRole('link', { name: /Download original/ })).toBeVisible();
+  await guestPage.getByLabel('Add several JPEGs').setInputFiles([
+    { name: 'batch-one.jpg', mimeType: 'image/jpeg', buffer: jpeg },
+    { name: 'batch-two.jpg', mimeType: 'image/jpeg', buffer: jpeg },
+  ]);
+  await expect(guestPage.getByText('2 of 2 ready')).toBeVisible();
+  await expect(guestPage.getByRole('img', { name: 'Shared by Aunt May' })).toHaveCount(3);
+
   expect(await guestPage.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
   const repeatContext = await browser.newContext(testInfo.project.use);
@@ -75,12 +82,12 @@ test('a contributor joins, shares one JPEG, and loses access when revoked', asyn
   await expect(repeatPage.getByText('Continue as Aunt May.')).toBeVisible();
   await repeatPage.getByRole('button', { name: 'Join event' }).click();
   await expect(repeatPage).toHaveURL(/\/events\/[0-9a-f-]+$/);
-  await expect(repeatPage.getByRole('img', { name: 'Shared by Aunt May' })).toBeVisible();
+  await expect(repeatPage.getByRole('img', { name: 'Shared by Aunt May' })).toHaveCount(3);
   expect(errors).toEqual([]);
 
   await page.reload();
   await expect(page.getByText('Contributor · Aunt May')).toBeVisible();
-  await expect(page.getByRole('img', { name: 'Shared by Aunt May' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Shared by Aunt May' })).toHaveCount(3);
   await page.getByRole('button', { name: 'Revoke' }).click();
   await expect(page.getByText('Contributor · Aunt May · Revoked')).toBeVisible();
   await guestPage.reload();

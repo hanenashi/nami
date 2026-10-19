@@ -1,7 +1,7 @@
 # NAMI status
 
 2026-10-19 — M0 and M1 complete. Private events and scoped invitations work,
-and the first complete JPEG path now runs locally. Resumable batches come next.
+and the first complete JPEG path now runs locally. A basic resumable JPEG batch queue now works.
 
 ## Working locally
 
@@ -136,7 +136,7 @@ and the first complete JPEG path now runs locally. Resumable batches come next.
 
 ## Not verified / not built
 
-No browser resumable or multi-file upload, HEIC/video processing, gallery lightbox,
+No HEIC/video processing, gallery lightbox,
 scheduled backup/restore tooling or public deployment yet. Crash
 reconciliation for orphaned staging/files is still pending. No physical
 iPad/iPhone event-flow test yet. Current SSH-loopback invitation links work only
@@ -162,9 +162,9 @@ cloud dependencies or broad abstractions.
 
 ## Next task
 
-Continue M2 with durable JPEG finalization, original-name/type metadata and
-abandoned-session cleanup before connecting a browser bulk queue. The initial
-Tus transport is implemented and tested, but does not publish photos. Probe HEIC support in the actual image early;
+Continue M2 with abandoned-session cleanup, quota/ledger improvements and
+100-file interrupted-batch testing. JPEG finalization and a simple sequential
+browser queue are implemented; HEIC/video work remains later. Probe HEIC support in the actual image early;
 JPEG remains the only accepted type until a decoder is verified.
 
 ## M2 transport increment
@@ -177,9 +177,10 @@ JPEG remains the only accepted type until a decoder is verified.
   restart the API and resume with byte-exact results. They also test wrong
   offsets, cross-event/other-guest/viewer denial, revocation, cancellation,
   oversize creation and session allocation limits.
-- This increment stages untrusted bytes only. No gallery publication, expiry,
-  background work, browser queue or Ready status is claimed. Completed staging
-  still occupies a slot until cancelled; orphan reconciliation remains pending.
+- Completed staged JPEGs now enter the verified original/preview/gallery path.
+  A browser queue shows per-file and total progress, pause/retry/cancel and
+  resumes on reselect after a reload. No expiry/background job processing or
+  orphan reconciliation yet.
 
 ## Latest deployment and recovery check
 
@@ -194,3 +195,20 @@ JPEG remains the only accepted type until a decoder is verified.
 - Rebuilt the Docker image and deployed on the existing data mount. Container
   is healthy and remains loopback-only. This is a same-host recovery check;
   off-host disaster recovery and scheduled backups are still outstanding.
+
+## JPEG batch increment
+
+- API tests verify a completed upload across restart finalizes to exact original
+  bytes, a preview and a gallery row; repeated finalization is idempotent.
+  Wrong-owner requests and invalid JPEGs are rejected.
+- Browser test transfers two JPEGs through the queue alongside the existing
+  single uploader, then reads all three from the gallery across sessions.
+- `npm run check` and `npm run test:e2e` cover this increment. Tests use desktop
+  Chromium and simulated iPad/iPhone WebKit; physical device tests remain open.
+
+- Before the batch deployment, stopped the container and verified a fresh full
+  backup at `../nami-backups/pre-batch-20261019` with SHA-256 manifest. A
+  disposable restore started successfully. Live and restored SQLite rows match
+  the snapshot (2 actors, 3 sessions, 1 event, 2 access records, 1 invitation,
+  2 photos); original and preview hashes match. The new image is healthy and
+  still bound to `127.0.0.1:3000`.

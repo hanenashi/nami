@@ -251,10 +251,10 @@ Backup design must coordinate the database snapshot with original files and GC.
 - [x] Verify the complete flow in Docker and desktop/iPad/iPhone browser profiles.
 
 ### M2 — Resumable bulk upload
-- [ ] Uppy queue and clear per-file/total progress.
+- [x] Simple sequential browser queue with per-file/total progress; Uppy remains optional if needed for later UX.
 - [x] Initial Tus transport to persistent staging, owner/event permission checks on create/HEAD/PATCH/DELETE; dropped connection and API restart tested.
-- [ ] Durable finalization into the verified JPEG/gallery path; transport completion alone is not Ready.
-- [ ] Pause/retry/resume, cancellation, browser reselect recovery where feasible.
+- [x] Retryable JPEG finalization into the verified original/preview/gallery path; transport completion alone is not Ready.
+- [x] Pause/retry/resume, cancellation and browser reselect recovery for JPEG files.
 - [ ] File size/type/quota/staging cleanup enforcement and ledger.
 - [ ] Test interrupted network, API restart and repeated batches.
 

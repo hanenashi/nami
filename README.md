@@ -14,8 +14,8 @@ Safari compatibility come first.
 Milestone **M1, private events and invitations, is complete**, along with the
 first complete photo path. An organizer or invited contributor can add one JPEG
 at a time; NAMI preserves its exact bytes, makes a separate preview, shows who
-shared it and provides an authorized original download. Resumable batches and
-other photo/video formats come next. NAMI is not ready for family photographs
+shared it and provides an authorized original download. A simple sequential batch queue can now resume JPEG uploads after interruption
+when the same files are selected again. Other photo and video formats come next. NAMI is not ready for family photographs
 or internet traffic yet.
 
 ## Start on Beechan
@@ -210,8 +210,10 @@ accepts its absence, as browsers may omit it. Staged files survive API restarts,
 limited to 25 MiB each and ten sessions per actor (250 MiB maximum), and cannot
 be downloaded through this endpoint. DELETE frees a session's allocation.
 
-This is transport groundwork, not a second photo uploader: received bytes are
-not yet validated as JPEG or published into the gallery. The browser continues
-using the tested single-JPEG path. Durable finalization, abandoned-session
-cleanup, filename/type metadata and the bulk queue remain next. Until cleanup
-exists, staged sessions remain on disk until explicitly cancelled.
+Completed resumable files are verified as JPEG, copied to immutable originals,
+previewed, and added to the same private gallery. The bulk picker transfers
+one file at a time with individual and total progress, pause, retry and cancel.
+A network interruption keeps the server offset; reselect the same files after a
+page reload to continue. Keep the page open during processing. Abandoned-session
+cleanup and a durable background job ledger remain next. Until cleanup exists,
+staged sessions remain on disk until explicitly cancelled.
