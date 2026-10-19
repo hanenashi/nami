@@ -236,6 +236,10 @@ Backup design must coordinate the database snapshot with original files and GC.
 
 ### M1 — Private events and invitations
 - [x] Secure organizer bootstrap and local login/session.
+- [x] Host-only organizer passphrase reset with verified SQLite backup and
+  organizer-session invalidation; no public recovery endpoint.
+- [ ] Guest access replacement that preserves contributor identity when a link
+  is lost or revoked; do not let an admin silently impersonate a guest.
 - [x] Create/list event, view event details.
 - [x] Create, redeem and revoke viewer/contributor invitation; nickname and scoped guest session.
 - [x] Robust role/access enforcement across two test events.

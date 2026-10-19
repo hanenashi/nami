@@ -58,6 +58,23 @@ a passphrase of at least 12 characters. This creates the single organizer
 account. Later visits show the sign-in form. There is no email recovery yet, so
 store the passphrase in your password manager.
 
+If the organizer passphrase is lost, someone with trusted shell/Docker access
+to the NAMI host can reset it without deleting events or photos. From an
+interactive terminal on Beechan, with the container running:
+
+```sh
+cd /home/beechan/GIT/nami
+docker compose exec nami node apps/api/dist/admin-reset.js
+```
+
+The command asks for the new passphrase twice without echoing it. Do not put a
+passphrase on the command line. It makes and verifies a private SQLite backup in
+`../nami-data/backups/`, changes the existing organizer account and signs out
+its old sessions. Guest sessions, events and media are left alone. Sign in with
+the new passphrase afterward. This same-host database backup is a rollback aid,
+not a full photo backup or off-host disaster recovery. There is deliberately no
+unauthenticated web reset route or default recovery password.
+
 For the current private Pixel test, keep this SSH tunnel open in Termux:
 
 ```sh

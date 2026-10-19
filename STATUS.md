@@ -364,3 +364,30 @@ only accepted format now.
   organizer tab was refreshed over wireless ADB and showed six photos and six
   tiles without an alert. A physical repeat-upload test of the new behavior
   remains for the next hands-on check.
+
+## Organizer recovery increment
+
+- Added an interactive, host-only organizer passphrase reset command. It takes
+  no passphrase argument, makes and verifies a mode-0600 SQLite backup before
+  changing the existing organizer hash, and invalidates only organizer
+  sessions. It adds no HTTP recovery route or default password.
+- The login handler rechecks the current hash after asynchronous scrypt
+  verification so an old passphrase cannot create a session during a reset.
+- A disposable API test verified the backup, preserved organizer/event/invite
+  identity and guest access, rejected the old passphrase and accepted the new
+  one. A real pseudo-terminal test verified that the prompt does not echo a
+  synthetic passphrase; its old login returned 401 and new login 200.
+- The live organizer passphrase was not reset. Guest link replacement and
+  permanent member/admin account management remain future work.
+- `npm run check` passed lint, typechecking, both production builds and 9 API
+  tests. `npm run test:e2e` passed 12 desktop Chromium and WebKit iPad/iPhone
+  tests. The CLI was also exercised through a real pseudo-terminal on disposable
+  data, with no typed passphrase echoed.
+- Before deployment, the stopped live instance was backed up in full at
+  `../nami-backups/pre-admin-reset-20261019-2222` with a SHA-256 manifest.
+  A disposable restore started the new app and passed health, SQLite integrity
+  and foreign-key checks. The live container is healthy and loopback-only;
+  3 actors, 5 sessions, 1 event, 1 access row, 0 invitations, 4 media rows and
+  0 upload sessions match the pre-deploy snapshot. Every live original/preview
+  hash matches. The reset command exists in the image, and no live reset
+  backup was created: the live organizer credentials were not touched.

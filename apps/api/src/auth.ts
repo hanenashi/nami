@@ -6,7 +6,8 @@ import type { NamiDatabase } from './database.js';
 
 export const COOKIE_NAME = 'nami_session';
 const SESSION_SECONDS = 60 * 60 * 24 * 7;
-const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MAX_LENGTH = 256;
 const SCRYPT_N = 32_768;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
@@ -24,7 +25,7 @@ const authBodySchema = {
   additionalProperties: false,
   required: ['password'],
   properties: {
-    password: { type: 'string', minLength: 1, maxLength: 256 },
+    password: { type: 'string', minLength: 1, maxLength: PASSWORD_MAX_LENGTH },
   },
 } as const;
 
@@ -33,7 +34,7 @@ const setupBodySchema = {
   required: ['displayName', 'password'],
   properties: {
     displayName: { type: 'string', minLength: 1, maxLength: 80 },
-    password: { type: 'string', minLength: PASSWORD_MIN_LENGTH, maxLength: 256 },
+    password: { type: 'string', minLength: PASSWORD_MIN_LENGTH, maxLength: PASSWORD_MAX_LENGTH },
   },
 } as const;
 
@@ -52,7 +53,11 @@ function deriveKey(password: string, salt: Buffer) {
   });
 }
 
-async function hashPassword(password: string) {
+export async function hashOrganizerPassword(password: string) {
+  const length = Array.from(password).length;
+  if (length < PASSWORD_MIN_LENGTH || length > PASSWORD_MAX_LENGTH) {
+    throw new Error(`The passphrase must be ${PASSWORD_MIN_LENGTH}–${PASSWORD_MAX_LENGTH} characters long.`);
+  }
   const salt = randomBytes(16);
   const key = await deriveKey(password, salt);
   return ['scrypt', SCRYPT_N, SCRYPT_R, SCRYPT_P, salt.toString('base64url'), key.toString('base64url')].join('$');
@@ -164,7 +169,7 @@ export async function registerAuth(app: FastifyInstance, database: NamiDatabase,
     if (findOrganizer(database)) return reply.code(409).send({ error: 'NAMI has already been set up.' });
     const displayName = request.body.displayName.trim();
     if (!displayName) return reply.code(400).send({ error: 'Please enter your name.' });
-    const passwordHash = await hashPassword(request.body.password);
+    const passwordHash = await hashOrganizerPassword(request.body.password);
     const actorId = randomUUID();
     try {
       database.prepare(`
@@ -187,6 +192,11 @@ export async function registerAuth(app: FastifyInstance, database: NamiDatabase,
     const organizer = findOrganizer(database);
     if (!organizer) return reply.code(409).send({ error: 'NAMI still needs to be set up.' });
     if (!await verifyPassword(request.body.password, organizer.password_hash)) {
+      return reply.code(401).send({ error: 'That passphrase didn’t work.' });
+    }
+    // A host-side reset may have changed the hash while scrypt was running.
+    const current = findOrganizer(database);
+    if (!current || current.id !== organizer.id || current.password_hash !== organizer.password_hash) {
       return reply.code(401).send({ error: 'That passphrase didn’t work.' });
     }
     issueSession(database, reply, organizer.id, secureCookies);
