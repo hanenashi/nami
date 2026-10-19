@@ -498,3 +498,36 @@ only accepted format now.
   0 invitations, 0 media, 1 superadmin credential, 2 superadmin sessions).
   Both new write routes deny unauthenticated requests; the service remains
   loopback-only. Neither organizer option was run against live data.
+
+## Android Chrome unreadable-file investigation
+
+- After the owner created organizer `Standa` and event `pokus`, the first of two
+  selected JPEGs reached the album, while `9628.jpg` failed before sending a
+  byte. On the real Pixel Chrome tab, CDP reported `net::ERR_UPLOAD_FILE_CHANGED`
+  for PATCH; both a one-chunk and full `File.arrayBuffer()` read then failed
+  with `NotReadableError`. HEAD to the private NAMI tunnel succeeded, and the
+  server had one zero-byte upload session. This points to Chrome losing access
+  to the selected file, rather than NAMI rejecting its JPEG or the tunnel
+  failing. The precise Android picker/provider trigger remains unverified.
+- The web uploader now reads each 256 KiB chunk into memory before PATCH,
+  checks the first chunk before creating a new upload session, and retains the
+  input selection after choosing files. If the browser cannot read a file, the
+  album directs the person to reselect it via Files/Browse and hides the futile
+  Retry button for that selection. A real network failure still offers Retry.
+- `npm run check` passed lint, production build, TypeScript and 12 API tests.
+  `npm run test:e2e` passed 15 tests across desktop Chromium and iPad/iPhone
+  WebKit profiles. A browser test simulates an unreadable file, verifies the
+  recovery message and confirms no server upload was started. Successful batch
+  and interrupted-PATCH Retry paths still pass. Real Pixel reselection after
+  deployment remains to be checked.
+- Before deployment, the stopped service was fully snapshotted at
+  `../nami-backups/pre-android-picker-20261019T150215Z`. All four active files
+  matched their SHA-256 copy hashes; SQLite integrity and foreign-key checks
+  passed. A disposable copy booted the rebuilt API and answered health 200.
+  After deployment the same four live files still match, with 1 actor, 1
+  session, 1 event, 1 access row, 0 invitations, 1 media row and 1 unfinished
+  upload session. No backend schema changed. The rebuilt container is healthy
+  and bound only to `127.0.0.1:3000`; the Pixel's SSH tunnel answered health
+  from Termux. Reloading the real Pixel Chrome tab loaded the new JavaScript,
+  showed `pokus` and its existing photo, and produced no page errors. A second
+  real JPEG selection has not yet been tested on that device.

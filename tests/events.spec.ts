@@ -58,6 +58,26 @@ test('organizer can select photos and double-confirm event removal', async ({ pa
     { name: 'two.jpg', mimeType: 'image/jpeg', buffer: secondJpeg },
   ]);
   await expect(page.getByRole('button', { name: /Open photo/ })).toHaveCount(2);
+  expect(await page.getByLabel('Add photos').evaluate(input => (input as HTMLInputElement).files?.length)).toBe(2);
+  await page.evaluate(() => {
+    const slice = File.prototype.slice;
+    File.prototype.slice = function (...args) {
+      if (this.name === 'unreadable.jpg') throw new DOMException('File handle lost', 'NotReadableError');
+      return slice.apply(this, args);
+    };
+  });
+  let uploadsStarted = 0;
+  await page.route('**/api/events/**/uploads', async route => {
+    if (route.request().method() === 'POST') uploadsStarted++;
+    await route.continue();
+  });
+  await page.getByLabel('Add photos').setInputFiles({ name: 'unreadable.jpg', mimeType: 'image/jpeg', buffer: jpeg });
+  await expect(page.getByText(/browser can no longer read this photo/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Retry' })).toHaveCount(0);
+  expect(uploadsStarted).toBe(0);
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.unrouteAll({ behavior: 'wait' });
+  await expect(page.getByRole('button', { name: /Open photo/ })).toHaveCount(2);
   await page.getByRole('button', { name: 'Select', exact: true }).click();
   await page.getByRole('button', { name: 'All', exact: true }).click();
   await expect(page.getByText('2 selected')).toBeVisible();

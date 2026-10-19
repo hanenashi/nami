@@ -10,6 +10,18 @@ export class UploadFailure extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
+export class UnreadablePhotoError extends Error {
+  constructor() { super('The browser can no longer read this photo. Tap Add photos and select it again from Files or Browse, preferably from local storage.'); }
+}
+
+async function readChunk(file: File, offset: number) {
+  try {
+    return await file.slice(offset, offset + chunkBytes).arrayBuffer();
+  } catch {
+    throw new UnreadablePhotoError();
+  }
+}
+
 async function failure(response: Response) {
   try {
     const body = await response.json() as { error?: string };
@@ -57,6 +69,9 @@ export async function uploadResumable(
       if (!Number.isInteger(offset) || offset < 0 || offset > file.size) throw new Error('The saved upload has an invalid offset.');
     }
   }
+  // Read before creating a server session, and send bytes rather than a file-backed Blob.
+  // Some Android pickers revoke their file handle before fetch reads its body.
+  let chunk = offset < file.size ? await readChunk(file, offset) : null;
   if (!location) {
     const created = await fetch(uploadPath(eventId), {
       method: 'POST', headers: { ...headers, 'Upload-Length': String(file.size) }, signal,
@@ -68,20 +83,29 @@ export async function uploadResumable(
   }
   onProgress(offset);
   while (offset < file.size) {
-    const response = await fetch(location, {
-      method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': String(offset) },
-      body: file.slice(offset, offset + chunkBytes), signal,
-    });
+    chunk ??= await readChunk(file, offset);
+    let response: Response;
+    try {
+      response = await fetch(location, {
+        method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': String(offset) },
+        body: chunk, signal,
+      });
+    } catch (reason) {
+      if (reason instanceof TypeError) await readChunk(file, offset);
+      throw reason;
+    }
     if (response.status === 409) {
       const current = await fetch(location, { method: 'HEAD', headers, signal, cache: 'no-store' });
       if (!current.ok) throw await failure(current);
       offset = Number(current.headers.get('upload-offset'));
+      chunk = null;
       continue;
     }
     if (!response.ok) throw await failure(response);
     const next = Number(response.headers.get('upload-offset'));
     if (!Number.isInteger(next) || next <= offset || next > file.size) throw new Error('NAMI returned an invalid upload offset.');
     offset = next;
+    chunk = null;
     onProgress(offset);
   }
   const finalized = await fetch(`${location}/finalize`, {

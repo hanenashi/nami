@@ -25,6 +25,13 @@ existing tile and original rather than adding another copy. The album reports
 how many selected files were already present. The first contributor attribution
 is retained; visually similar photos with different bytes remain separate.
 
+On Android, a cloud or photo picker can occasionally hand Chrome a file it can
+no longer read. If an upload says to select the photo again, tap **Add photos**
+and choose a local copy through **Files** or the picker's **Browse** option.
+Retrying the old, unreadable selection will not help. NAMI checks that it can
+read a chunk before opening a new server upload and keeps the picker selection
+alive while the batch runs; other files that already reached the album remain.
+
 In an organizer album, **Select** switches thumbnails into selection mode.
 Use **All**, **None**, or **Reverse**, then confirm **Remove selected**. Removing
 photos deletes their original and preview files. **Event settings** contains

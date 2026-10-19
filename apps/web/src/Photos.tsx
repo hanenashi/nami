@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { deleteMedia, type EventAccess, type NamiMedia } from './api.js';
 import { PhotoViewer } from './PhotoViewer.js';
-import { cancelResumable, uploadResumable, UploadFailure } from './resumable.js';
+import { cancelResumable, uploadResumable, UnreadablePhotoError, UploadFailure } from './resumable.js';
 
 const maxPhotoBytes = 25 * 1024 * 1024;
 
@@ -11,6 +11,7 @@ type BatchItem = {
   status: 'waiting' | 'uploading' | 'processing' | 'paused' | 'failed' | 'ready' | 'cancelled';
   bytes: number;
   error?: string;
+  unreadable?: boolean;
 };
 
 function formatFileSize(bytes: number) {
@@ -61,7 +62,7 @@ export function EventPhotos({ eventId, role, initialMedia }: {
         if (!item) break;
         const controller = new AbortController();
         active.current = controller;
-        updateItem(item.id, { status: 'uploading', error: undefined });
+        updateItem(item.id, { status: 'uploading', error: undefined, unreadable: false });
         try {
           const result = await uploadResumable(eventId, item.file, controller.signal, bytes =>
             updateItem(item.id, { bytes, status: bytes === item.file.size ? 'processing' : 'uploading' }));
@@ -81,11 +82,13 @@ export function EventPhotos({ eventId, role, initialMedia }: {
           } else {
             updateItem(item.id, {
               status: 'failed',
-              error: reason instanceof TypeError ? 'Connection interrupted. Retry this photo when ready.' :
+              unreadable: reason instanceof UnreadablePhotoError,
+              error: reason instanceof UnreadablePhotoError ? reason.message :
+                reason instanceof TypeError ? 'Connection interrupted. Retry this photo when ready.' :
                 reason instanceof UploadFailure && reason.status === 429 ? 'Too many unfinished uploads. Retry or cancel older attempts first.' :
                   reason instanceof Error ? reason.message : 'Upload failed.',
             });
-            if (reason instanceof TypeError || reason instanceof UploadFailure &&
+            if (reason instanceof TypeError || reason instanceof UnreadablePhotoError || reason instanceof UploadFailure &&
               (reason.status === 429 || reason.status === 401 || reason.status === 403 || reason.status >= 500)) {
               paused.current = true;
             }
@@ -99,7 +102,6 @@ export function EventPhotos({ eventId, role, initialMedia }: {
   }
   function choosePhotos(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.currentTarget.files ?? []);
-    event.currentTarget.value = '';
     const accepted = files.filter(file => /\.jpe?g$/i.test(file.name) && file.size > 0 && file.size <= maxPhotoBytes);
     if (accepted.length !== files.length) setError('Choose JPEG photos up to 25 MB each.');
     else setError('');
@@ -183,7 +185,8 @@ export function EventPhotos({ eventId, role, initialMedia }: {
           <label className="add-photos-action">
             <span className="add-icon" aria-hidden="true">+</span>
             <span>Add photos</span>
-            <input aria-label="Add photos" type="file" accept="image/jpeg,.jpg,.jpeg" multiple onChange={choosePhotos} />
+            <input aria-label="Add photos" type="file" accept="image/jpeg,.jpg,.jpeg" multiple
+              onClick={event => { event.currentTarget.value = ''; }} onChange={choosePhotos} />
           </label>
         ) : null}
         <div className="album-action-end">
@@ -222,7 +225,7 @@ export function EventPhotos({ eventId, role, initialMedia }: {
                 {visibleBatch.map(item => <li key={item.id}>
                   <div><strong>{item.file.name}</strong><span>{item.status === 'failed' ? item.error : item.status} · {formatFileSize(item.bytes)} / {formatFileSize(item.file.size)} MB</span></div>
                   <progress max={item.file.size} value={item.bytes} aria-label={`${item.file.name} progress`} />
-                  {item.status === 'failed' ? <button type="button" onClick={() => retry(item.id)}>Retry</button> : null}
+                  {item.status === 'failed' && !item.unreadable ? <button type="button" onClick={() => retry(item.id)}>Retry</button> : null}
                   {['waiting', 'uploading', 'paused', 'failed'].includes(item.status) ? <button type="button" onClick={() => cancel(item)}>Cancel</button> : null}
                 </li>)}
               </ul>
