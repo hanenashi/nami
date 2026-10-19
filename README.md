@@ -200,6 +200,16 @@ cloud dependencies or broad abstractions.
 - `battleplan.md`: product intent and milestones.
 - `STATUS.md`: verified progress, limits and the next concrete task.
 
+## Planned album redesign
+
+A mobile-first interface pass is next, before family invitations. The research
+PDF on the Pixel (`Documents/codex/NAMI mobile photo-sharing UX research.pdf`)
+and the saved [mobile concept](docs/design/album-mobile-concept.png) guide an
+album-first event view: one Add photos control, a compact header, a dense photo
+grid, a viewer and quieter organizer/progress controls. The concept uses
+synthetic images; the live interface has not changed yet. See `STATUS.md` for
+the implementation and test checklist.
+
 ## Resumable upload groundwork
 
 The API now supports private Tus sessions at `/api/events/:eventId/uploads`:

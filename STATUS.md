@@ -162,9 +162,26 @@ cloud dependencies or broad abstractions.
 
 ## Next task
 
-Continue M2 with quota/ledger improvements and browser interruption and large-batch testing. JPEG finalization and a simple sequential
-browser queue are implemented; HEIC/video work remains later. Probe HEIC support in the actual image early;
-JPEG remains the only accepted type until a decoder is verified.
+Begin the mobile-first album redesign before more backend work. The user supplied
+`/storage/emulated/0/Documents/codex/NAMI mobile photo-sharing UX research.pdf`
+on the Pixel (22 pages). It recommends progressive disclosure: photos and one
+Add photos control first; upload machinery and organizer administration behind
+secondary controls. A synthetic iPhone WebKit screenshot of the current page
+confirmed the gallery is pushed below two large upload forms and a tall header.
+The local visual reference is `docs/design/album-mobile-concept.png`; it is a
+concept only and contains synthetic imagery, not product assets.
+
+Implement in tested steps: (1) unify the file picker while retaining the current
+resumable client, compact organizer/guest event headers, collapse organizer
+invitations and render a cropped three-column mobile grid; (2) add a full-screen
+viewer with swipe, zoom, keyboard and accessible close/focus return; (3) reduce
+invitation friction and make upload progress quiet. Keep exact originals and
+existing API/data unchanged. Check desktop Chromium, iPad/iPhone WebKit,
+320px narrow screens and real Pixel touch. Use disposable data for screenshots.
+No redesign code has been changed or deployed yet.
+
+After UX, return to M2 quota/ledger work, browser interruption/large-batch
+checks and HEIC decoder probing. JPEG remains the only accepted format now.
 
 ## M2 transport increment
 
