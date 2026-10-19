@@ -255,6 +255,8 @@ Backup design must coordinate the database snapshot with original files and GC.
 - [x] Initial Tus transport to persistent staging, owner/event permission checks on create/HEAD/PATCH/DELETE; dropped connection and API restart tested.
 - [x] Retryable JPEG finalization into the verified original/preview/gallery path; transport completion alone is not Ready.
 - [x] Pause/retry/resume, cancellation and browser reselect recovery for JPEG files.
+- [x] Stop the client queue on connection/server/capacity failure so a browser
+  mode switch cannot create ten abandoned sessions; retry resumes the same file.
 - [ ] File size/type/quota enforcement and complete upload ledger; seven-day idle transport pruning is implemented.
 - [x] Test dropped network, API restart and 100 sequential backend JPEG uploads/finalizations.
 - [ ] Test 100-file browser queue and long-running mobile behavior.
@@ -281,6 +283,7 @@ worker redesign during this interface pass.
 - [x] Test desktop Chromium, iPad/iPhone WebKit and 320px layouts with disposable
   photos; inspect screenshots and fix awkward layouts.
 - [ ] Test real Pixel touch and physical iPad/iPhone use before family invitations.
+- [ ] Retest interrupted/retried batches on the real Pixel in mobile-site mode.
 
 **Exit:** a family member sees the album immediately and uses one clear action
 to add photos. Keep the service private and preserve live data during deployment.

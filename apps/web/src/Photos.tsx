@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { type EventAccess, type NamiMedia } from './api.js';
 import { PhotoViewer } from './PhotoViewer.js';
-import { cancelResumable, uploadResumable } from './resumable.js';
+import { cancelResumable, uploadResumable, UploadFailure } from './resumable.js';
 
 const maxPhotoBytes = 25 * 1024 * 1024;
 
@@ -36,7 +36,12 @@ export function EventPhotos({ eventId, role, initialMedia }: {
   const cancelled = useRef(new Set<string>());
   const canUpload = role === 'organizer' || role === 'contributor';
 
-  useEffect(() => () => active.current?.abort(), []);
+  useEffect(() => {
+    paused.current = false;
+    const stop = () => { paused.current = true; active.current?.abort(); };
+    window.addEventListener('pagehide', stop);
+    return () => { window.removeEventListener('pagehide', stop); stop(); };
+  }, []);
 
   const updateItem = (id: string, patch: Partial<BatchItem>) => {
     batchRef.current = batchRef.current.map(item => item.id === id ? { ...item, ...patch } : item);
@@ -68,7 +73,16 @@ export function EventPhotos({ eventId, role, initialMedia }: {
           } else if (controller.signal.aborted) {
             updateItem(item.id, { status: 'paused' });
           } else {
-            updateItem(item.id, { status: 'failed', error: reason instanceof Error ? reason.message : 'Upload failed.' });
+            updateItem(item.id, {
+              status: 'failed',
+              error: reason instanceof TypeError ? 'Connection interrupted. Retry this photo when ready.' :
+                reason instanceof UploadFailure && reason.status === 429 ? 'Too many unfinished uploads. Retry or cancel older attempts first.' :
+                  reason instanceof Error ? reason.message : 'Upload failed.',
+            });
+            if (reason instanceof TypeError || reason instanceof UploadFailure &&
+              (reason.status === 429 || reason.status === 401 || reason.status === 403 || reason.status >= 500)) {
+              paused.current = true;
+            }
           }
         } finally { active.current = null; }
       }
@@ -83,10 +97,13 @@ export function EventPhotos({ eventId, role, initialMedia }: {
     const accepted = files.filter(file => /\.jpe?g$/i.test(file.name) && file.size > 0 && file.size <= maxPhotoBytes);
     if (accepted.length !== files.length) setError('Choose JPEG photos up to 25 MB each.');
     else setError('');
+    const selected = new Set(accepted.map(file => `${file.name}:${file.size}:${file.lastModified}`));
     batchRef.current = [
-      ...batchRef.current.filter(item => item.status !== 'ready' && item.status !== 'cancelled'),
+      ...batchRef.current.filter(item => item.status !== 'ready' && item.status !== 'cancelled' &&
+        !(item.status === 'failed' && selected.has(`${item.file.name}:${item.file.size}:${item.file.lastModified}`))),
       ...accepted.map(file => ({ id: crypto.randomUUID(), file, status: 'waiting' as const, bytes: 0 })),
     ];
+    paused.current = false;
     setBatch([...batchRef.current]);
     void runQueue();
   }
@@ -101,7 +118,7 @@ export function EventPhotos({ eventId, role, initialMedia }: {
     setBatch([...batchRef.current]);
     void runQueue();
   }
-  function retry(id: string) { cancelled.current.delete(id); updateItem(id, { status: 'waiting' }); void runQueue(); }
+  function retry(id: string) { cancelled.current.delete(id); paused.current = false; updateItem(id, { status: 'waiting' }); void runQueue(); }
   function cancel(item: BatchItem) {
     cancelled.current.add(item.id);
     if (item.status === 'uploading') active.current?.abort();
@@ -152,7 +169,7 @@ export function EventPhotos({ eventId, role, initialMedia }: {
             <div className="upload-progress-body">
               <p>Keep this page open while adding photos. Select the same files again after an interruption to resume.</p>
               {pendingCount > 0 && !paused.current ? <button type="button" className="secondary-button" onClick={pauseBatch}>Pause uploads</button> : null}
-              {paused.current ? <button type="button" className="secondary-button" onClick={resumeBatch}>Resume uploads</button> : null}
+              {paused.current && failedCount === 0 ? <button type="button" className="secondary-button" onClick={resumeBatch}>Resume uploads</button> : null}
               <ul className="batch-list">
                 {visibleBatch.map(item => <li key={item.id}>
                   <div><strong>{item.file.name}</strong><span>{item.status === 'failed' ? item.error : item.status} · {formatFileSize(item.bytes)} / {formatFileSize(item.file.size)} MB</span></div>

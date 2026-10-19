@@ -6,12 +6,16 @@ const uploadPath = (eventId: string) => `/api/events/${encodeURIComponent(eventI
 const savedKey = (eventId: string, file: File) =>
   `nami-upload-v1:${eventId}:${file.name}:${file.size}:${file.lastModified}`;
 
+export class UploadFailure extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+
 async function failure(response: Response) {
   try {
     const body = await response.json() as { error?: string };
-    return new Error(body.error || `Upload failed (${response.status}).`);
+    return new UploadFailure(body.error || `Upload failed (${response.status}).`, response.status);
   } catch {
-    return new Error(`Upload failed (${response.status}).`);
+    return new UploadFailure(`Upload failed (${response.status}).`, response.status);
   }
 }
 

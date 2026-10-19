@@ -68,11 +68,25 @@ test('a contributor joins, shares one JPEG, and loses access when revoked', asyn
     buffer: jpeg,
   });
   await expect(guestPage.getByRole('button', { name: /Open photo 1 of 1/ })).toBeVisible();
+  let interrupted = false;
+  let newSessions = 0;
+  await guestPage.route('**/api/events/**/uploads**', async route => {
+    if (route.request().method() === 'POST' && /\/uploads$/.test(route.request().url())) newSessions++;
+    if (route.request().method() === 'PATCH' && !interrupted) {
+      interrupted = true;
+      await route.abort('failed');
+    } else await route.continue();
+  });
   await guestPage.getByLabel('Add photos').setInputFiles([
     { name: 'batch-one.jpg', mimeType: 'image/jpeg', buffer: jpeg },
     { name: 'batch-two.jpg', mimeType: 'image/jpeg', buffer: jpeg },
   ]);
+  await expect(guestPage.getByText('1 photo needs attention')).toBeVisible();
+  expect(newSessions).toBe(1);
+  await guestPage.getByRole('button', { name: 'Retry' }).click();
   await expect(guestPage.getByRole('button', { name: /Open photo/ })).toHaveCount(3);
+  expect(newSessions).toBe(2);
+  await guestPage.unrouteAll({ behavior: 'wait' });
   await expect(guestPage.getByText('3 photos')).toBeVisible();
   if (testInfo.project.name !== 'desktop-chromium') await guestPage.screenshot({ path: `/tmp/nami-${testInfo.project.name}-album.png`, fullPage: true });
   await guestPage.getByRole('button', { name: /Open photo 1 of 3/ }).click();

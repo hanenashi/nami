@@ -228,7 +228,9 @@ Completed resumable files are verified as JPEG, copied to immutable originals,
 previewed, and added to the same private gallery. The Add photos picker transfers
 one file at a time with individual and total progress, pause, retry and cancel.
 A network interruption keeps the server offset; reselect the same files after a
-page reload to continue. Keep the page open during processing. Incomplete
-sessions idle for seven days are pruned at startup and hourly, and orphaned
+page reload to continue. A connection failure pauses the queue at the failed
+photo; use Retry after the connection returns. Keep the page open during
+processing, and avoid switching the browser to desktop-site mode mid-batch.
+Incomplete sessions idle for seven days are pruned at startup and hourly, and orphaned
 transport files after a one-hour grace period. If a session has expired,
 reselecting starts a fresh upload. A durable background job ledger remains next.

@@ -195,8 +195,9 @@ Pixel touch, long batches and real photographs remain to check.
 
 ## Next task
 
-Test the album on the real Pixel and ask the iPad/iPhone testers for UX feedback
-before family invitations.
+Refresh the Pixel's existing Kiwi tab after its failed batch, reselect the same
+JPEGs in normal mobile-site mode, and check a real interrupted/retried transfer.
+Then ask the iPad/iPhone testers for UX feedback before family invitations.
 After UX, return to M2 quota/ledger work, browser interruption/large-batch
 checks and HEIC decoder probing. JPEG remains the only accepted format now.
 
@@ -273,3 +274,28 @@ checks and HEIC decoder probing. JPEG remains the only accepted format now.
   live originals and previews matched the manifest. The image is healthy and
   bound only to `127.0.0.1:3000`; the new built assets are served. This is a
   same-host backup, not an off-host disaster-recovery setup.
+
+## Pixel desktop-site interruption
+
+- On the real Pixel 10a, toggling Kiwi to desktop-site mode during a batch left
+  12 failed queue items. Ten zero-byte upload sessions filled the server's
+  ten-session limit, so later files received HTTP 429. The album showed 10
+  photos at the time; no completed photo was removed.
+- The queue now stops after the first connection, authentication, server or
+  capacity failure instead of opening more sessions. Page hide also aborts and
+  pauses the queue. Retry restarts the failed file and continues the rest;
+  choosing the same files after reload resumes saved server offsets. A browser
+  test aborts the first PATCH and verifies only one session was opened before
+  Retry, then both queued JPEGs reach the album. All 8 API and 12 browser tests
+  passed on the final code.
+- Before live recovery, a full snapshot with SHA-256 manifest was verified at
+  `../nami-backups/pre-pixel-recovery-20261019` (33 active files). A disposable
+  restore started and passed SQLite integrity/foreign-key checks. With the
+  container stopped, only the ten zero-byte abandoned upload sessions/files
+  were removed. Live and restored protected rows still match: 3 actors, 6
+  sessions, 2 events, 4 access rows, 3 invitations and 11 media rows. Original
+  and preview hashes match the snapshot. The updated service is healthy and
+  remains loopback-only; the Pixel's existing private tunnel reaches it.
+- The existing Kiwi tab still holds the old JavaScript until refreshed. A real
+  Pixel retry on the new build remains unverified. The desktop-site screenshot
+  appeared clipped; check normal mobile-site mode before assessing layout.
