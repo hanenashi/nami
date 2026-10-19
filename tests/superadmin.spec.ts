@@ -46,6 +46,10 @@ test('owner can manage people and recover the organizer in the browser', async (
     await guestCard.getByRole('button', { name: 'Disable guest access' }).click();
     await expect(guestCard).toContainText('No current event access');
     assertStatus(await app.inject({ url: `/api/events/${eventId}`, headers: { cookie: guestCookie } }), 401);
+    page.once('dialog', dialog => dialog.accept('Aunt May'));
+    await guestCard.getByRole('button', { name: 'Permanently delete' }).click();
+    await expect(guestCard).toHaveCount(0);
+    await expect(page.getByRole('status')).toContainText('Aunt May was permanently deleted');
 
     await page.getByText('Reset organizer passphrase').click();
     await page.getByLabel('New organizer passphrase').fill('replacement organizer passphrase');

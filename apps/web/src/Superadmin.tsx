@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
-  disableGuest, getSuperadminPeople, getSuperadminStatus, loginSuperadmin,
+  disableGuest, getSuperadminPeople, getSuperadminStatus, loginSuperadmin, permanentlyDeleteGuest,
   logoutSuperadmin, resetOrganizerFromSuperadmin, signOutPerson,
   type SuperadminPerson,
 } from './api.js';
@@ -96,6 +96,25 @@ export function Superadmin() {
     } finally { setWorking(false); }
   }
 
+  async function deleteGuest(person: SuperadminPerson) {
+    const confirmation = window.prompt(`Permanently delete ${person.displayName}? This removes their account and invitation history. It cannot be undone. Type their name to confirm:`, '');
+    if (confirmation === null) return;
+    if (confirmation !== person.displayName) {
+      setError('The name did not match. Nothing was deleted.');
+      return;
+    }
+    setWorking(true);
+    setError('');
+    setNotice('');
+    try {
+      await permanentlyDeleteGuest(person.id, confirmation);
+      await refresh();
+      setNotice(`${person.displayName} was permanently deleted. A private SQLite backup was created first.`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Couldn’t delete this person.');
+    } finally { setWorking(false); }
+  }
+
   if (error && !status) return <p className="page-message" role="alert">{error}</p>;
   if (!status) return <p className="page-message">Opening owner controls…</p>;
   if (!status.configured) return (
@@ -126,7 +145,7 @@ export function Superadmin() {
         <div><p className="section-label">Owner controls</p><h1>People in NAMI.</h1></div>
         <button className="text-button" type="button" onClick={logout} disabled={working}>Sign out</button>
       </div>
-      <p className="superadmin-intro">See the organizer and everyone who has joined through an invitation. Disabling guest access keeps their photos and names in the album.</p>
+      <p className="superadmin-intro">See the organizer and everyone who has joined through an invitation. Disabling guest access keeps their photos and names in the album. Empty, inactive guest accounts can be permanently deleted.</p>
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       {notice ? <p className="superadmin-notice" role="status">{notice}</p> : null}
       {!people ? <p>Loading people…</p> : (
@@ -139,6 +158,7 @@ export function Superadmin() {
               <div className="person-actions">
                 {person.sessions > 0 ? <button className="secondary-button" type="button" onClick={() => void personAction(person, 'signout')} disabled={working}>Sign out all devices</button> : null}
                 {person.kind === 'guest' && person.events.length > 0 ? <button className="quiet-danger" type="button" onClick={() => void personAction(person, 'disable')} disabled={working}>Disable guest access</button> : null}
+                {person.canPermanentlyDelete ? <button className="quiet-danger" type="button" onClick={() => void deleteGuest(person)} disabled={working}>Permanently delete</button> : null}
               </div>
             </article>
           ))}

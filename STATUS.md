@@ -446,5 +446,27 @@ only accepted format now.
   7 sessions, 1 event, 1 event-access row, 3 invitations, 4 media rows, and no
   unfinished uploads. The new superadmin tables are empty, the people API
   denies unauthenticated access, and the Pixel's existing private tunnel
-  reaches `/superadmin`. The real superadmin passphrase has deliberately not
-  been set; the owner must choose it in an interactive Beechan terminal.
+  reaches `/superadmin`. The owner subsequently set the real superadmin
+  passphrase through the interactive Beechan command; its value was never
+  shared with Codex.
+
+## Inactive guest cleanup increment
+
+- Added a manual **Permanently delete** action for guests who have no current
+  event access, active session, contributed photos, unfinished uploads or usable
+  invitation. It requires typing the guest's name and verifies a private
+  SQLite backup before removing the actor and its invitation history. The
+  organizer and photo contributors cannot be deleted; no automatic purge runs.
+- API coverage checks authorization, same-origin protection, live-access and
+  photo guards, name confirmation, backup creation, deletion and surviving
+  event/foreign-key integrity. Browser coverage uses desktop Chromium and
+  iPad/iPhone WebKit. `npm run check` passed (11 API tests) and the full browser
+  suite passed (15 tests).
+- The rebuilt Beechan image is live and healthy on `127.0.0.1:3000` only. Before
+  switching containers, a full 25-file snapshot was saved at
+  `../nami-backups/pre-guest-cleanup-20261019-142552`; every SHA-256 matched,
+  and SQLite integrity and foreign keys passed. Post-deploy counts still match
+  the snapshot: 4 actors, 5 sessions, 1 event, 1 event-access row, 3 invitations,
+  4 media, 0 uploads, 1 superadmin credential and 2 superadmin sessions. All 8
+  active media files still match by SHA-256. The page responds, the people API
+  rejects unauthenticated access, and no live guest was deleted.

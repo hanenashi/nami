@@ -248,7 +248,18 @@ test('superadmin independently manages people and recovers the organizer', async
   assert.deepEqual(people.map(person => person.kind), ['organizer', 'guest']);
   assert.equal(people[1].displayName, 'Aunt May');
   assert.equal(people[1].events[0].title, 'Kept family event');
+  assert.equal((people[1] as typeof people[number] & { canPermanentlyDelete: boolean }).canPermanentlyDelete, false);
   const guestId = people[1].id;
+  const deleteUrl = `${adminUrl}/people/${guestId}/delete`;
+  const deleteBody = { confirmName: 'Aunt May' };
+  assert.equal((await app.inject({ method: 'POST', url: deleteUrl, headers: organizerHeaders,
+    payload: deleteBody })).statusCode, 401);
+  assert.equal((await app.inject({ method: 'POST', url: deleteUrl, headers: adminHeaders,
+    payload: deleteBody })).statusCode, 409);
+  assert.equal((await app.inject({ method: 'POST', url: `${adminUrl}/people/${people[0].id}/delete`,
+    headers: adminHeaders, payload: { confirmName: 'Organizer' } })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'POST', url: deleteUrl,
+    headers: { ...adminHeaders, origin: 'http://other.test' }, payload: deleteBody })).statusCode, 403);
   assert.equal((await app.inject({ method: 'POST', url: `${adminUrl}/people/${guestId}/disable`,
     headers: organizerHeaders })).statusCode, 401);
   assert.equal((await app.inject({ method: 'POST', url: `${adminUrl}/people/${people[0].id}/disable`,
@@ -265,10 +276,35 @@ test('superadmin independently manages people and recovers the organizer', async
     headers: adminHeaders })).statusCode, 204);
   assert.equal((await app.inject({ url: `/api/events/${eventId}`, headers: { cookie: secondGuestCookie } })).statusCode, 401);
   assert.equal((await app.inject(`/api/invitations/${inviteSecret}`)).statusCode, 410);
-  const database = new Database(join(dataRoot, 'db', 'nami.sqlite'), { readonly: true });
+  const database = new Database(join(dataRoot, 'db', 'nami.sqlite'));
   assert.equal((database.prepare('SELECT count(*) AS n FROM actors WHERE id = ?').get(guestId) as { n: number }).n, 1);
   assert.equal((database.prepare('SELECT count(*) AS n FROM events WHERE id = ?').get(eventId) as { n: number }).n, 1);
+  database.prepare(`INSERT INTO media (
+    id, event_id, uploaded_by, original_name, media_type, size_bytes, sha256,
+    width, height, preview_width, preview_height, preview_size_bytes, created_at
+  ) VALUES (?, ?, ?, ?, 'image/jpeg', 1, ?, 1, 1, 1, 1, 1, ?)`)
+    .run('guest-photo-guard', eventId, guestId, 'kept.jpg', 'a'.repeat(64), Date.now());
+  assert.equal((await app.inject({ method: 'POST', url: deleteUrl, headers: adminHeaders,
+    payload: deleteBody })).statusCode, 409);
+  database.prepare('DELETE FROM media WHERE id = ?').run('guest-photo-guard');
   database.close();
+
+  const inactive = (await app.inject({ url: `${adminUrl}/people`, headers: adminHeaders })).json().people as
+    { id: string; canPermanentlyDelete: boolean }[];
+  assert.equal(inactive.find(person => person.id === guestId)?.canPermanentlyDelete, true);
+  assert.equal((await app.inject({ method: 'POST', url: deleteUrl, headers: adminHeaders,
+    payload: { confirmName: 'Wrong name' } })).statusCode, 400);
+  assert.equal((await app.inject({ method: 'POST', url: deleteUrl, headers: adminHeaders,
+    payload: deleteBody })).statusCode, 204);
+  const afterDeletion = new Database(join(dataRoot, 'db', 'nami.sqlite'), { readonly: true });
+  assert.equal((afterDeletion.prepare('SELECT count(*) AS n FROM actors WHERE id = ?').get(guestId) as { n: number }).n, 0);
+  assert.equal((afterDeletion.prepare('SELECT count(*) AS n FROM invitations WHERE actor_id = ?').get(guestId) as { n: number }).n, 0);
+  assert.equal((afterDeletion.prepare('SELECT count(*) AS n FROM events WHERE id = ?').get(eventId) as { n: number }).n, 1);
+  assert.equal((afterDeletion.pragma('foreign_key_check') as unknown[]).length, 0);
+  afterDeletion.close();
+  const backupsAfterDelete = (await readdir(join(dataRoot, 'backups'))).filter(name => name.endsWith('.sqlite'));
+  assert.equal(backupsAfterDelete.length, 2);
+  assert.ok(backupsAfterDelete.some(name => name.startsWith('guest-before-delete-')));
 
   const reset = await app.inject({ method: 'POST', url: `${adminUrl}/organizer/reset`, headers: adminHeaders,
     payload: { password: 'replacement organizer passphrase' } });
@@ -280,7 +316,7 @@ test('superadmin independently manages people and recovers the organizer', async
   assert.equal((await app.inject({ method: 'POST', url: '/api/auth/login', headers: origin,
     payload: { password: 'replacement organizer passphrase' } })).statusCode, 200);
   assert.equal((await app.inject({ url: `${adminUrl}/people`, headers: adminHeaders })).statusCode, 200);
-  assert.equal((await readdir(join(dataRoot, 'backups'))).filter(name => name.endsWith('.sqlite')).length, 2);
+  assert.equal((await readdir(join(dataRoot, 'backups'))).filter(name => name.endsWith('.sqlite')).length, 3);
 
   await setSuperadminPassphrase(dataRoot, 'rotated owner test passphrase');
   const restarted = await buildApp({ dataRoot, webRoot });

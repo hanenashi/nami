@@ -64,6 +64,7 @@ export type SuperadminPerson = {
   createdAt: number;
   sessions: number;
   photos: number;
+  canPermanentlyDelete: boolean;
   events: { id: string; title: string; role: 'organizer' | 'contributor' | 'viewer' }[];
 };
 
@@ -126,6 +127,13 @@ export async function signOutPerson(actorId: string) {
 
 export async function disableGuest(actorId: string) {
   const response = await fetch(`/api/superadmin/people/${encodeURIComponent(actorId)}/disable`, { method: 'POST' });
+  if (!response.ok) await readJson(response);
+}
+
+export async function permanentlyDeleteGuest(actorId: string, confirmName: string) {
+  const response = await fetch(`/api/superadmin/people/${encodeURIComponent(actorId)}/delete`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirmName }),
+  });
   if (!response.ok) await readJson(response);
 }
 

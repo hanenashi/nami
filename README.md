@@ -100,6 +100,13 @@ the organizer passphrase after making a SQLite backup. The superadmin cannot
 silently sign in as another person. A disabled guest can later receive a
 replacement link from the organizer's People & invitations panel.
 
+An inactive guest with no event access, active sessions, photos, unfinished
+uploads or usable invitation can instead be permanently deleted. The page
+requires typing the guest's name, then verifies a private SQLite backup before
+removing the guest and their invitation history. Organizers and guests who have
+contributed photos cannot be deleted this way. Deletion is manual; NAMI never
+automatically purges accounts.
+
 The superadmin login is independent of the organizer login, with its own
 hashed passphrase and session cookie. The page remains on NAMI's loopback-only
 service; knowing its URL does not grant access. There is no remote access to it

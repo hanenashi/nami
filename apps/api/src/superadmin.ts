@@ -22,6 +22,44 @@ function currentHash(database: NamiDatabase) {
   return (database.prepare('SELECT password_hash FROM superadmin WHERE id = 1').get() as { password_hash: string } | undefined)?.password_hash;
 }
 
+function canDeleteGuest(database: NamiDatabase, actorId: string) {
+  return Boolean(database.prepare(`
+    SELECT 1 FROM actors WHERE id = ? AND kind = 'guest'
+      AND NOT EXISTS (SELECT 1 FROM event_access WHERE actor_id = actors.id)
+      AND NOT EXISTS (SELECT 1 FROM sessions WHERE actor_id = actors.id AND expires_at > ?)
+      AND NOT EXISTS (SELECT 1 FROM media WHERE uploaded_by = actors.id)
+      AND NOT EXISTS (SELECT 1 FROM upload_sessions WHERE actor_id = actors.id)
+      AND NOT EXISTS (SELECT 1 FROM events WHERE owner_id = actors.id)
+      AND NOT EXISTS (SELECT 1 FROM invitations WHERE created_by = actors.id)
+      AND NOT EXISTS (
+        SELECT 1 FROM invitations WHERE actor_id = actors.id
+          AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)
+      )
+  `).get(actorId, Date.now(), Date.now()));
+}
+
+async function verifiedBackup(database: NamiDatabase, dataRoot: string, prefix: string, verify: (backup: NamiDatabase) => boolean) {
+  const backupDir = join(dataRoot, 'backups');
+  await mkdir(backupDir, { recursive: true, mode: 0o700 });
+  await chmod(backupDir, 0o700);
+  const backupPath = join(backupDir, `${prefix}-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomBytes(8).toString('hex')}.sqlite`);
+  try {
+    await database.backup(backupPath);
+    await chmod(backupPath, 0o600);
+    const backup = new Database(backupPath, { readonly: true });
+    try {
+      if (backup.pragma('integrity_check', { simple: true }) !== 'ok' ||
+        (backup.pragma('foreign_key_check') as unknown[]).length || !verify(backup)) {
+        throw new Error('SQLite backup verification failed. No account was changed.');
+      }
+    } finally { backup.close(); }
+  } catch (error) {
+    await unlink(backupPath).catch(() => {});
+    throw error;
+  }
+  return backupPath;
+}
+
 function hasSession(database: NamiDatabase, token: string | undefined) {
   if (!token) return false;
   const now = Date.now();
@@ -54,24 +92,8 @@ export async function setSuperadminPassphrase(dataRoot: string, passphrase: stri
       throw new Error('Database integrity check failed. No credentials were changed.');
     }
     const previous = currentHash(database);
-    const backupDir = join(dataRoot, 'backups');
-    await mkdir(backupDir, { recursive: true, mode: 0o700 });
-    await chmod(backupDir, 0o700);
-    const backupPath = join(backupDir, `superadmin-before-setup-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomBytes(8).toString('hex')}.sqlite`);
-    try {
-      await database.backup(backupPath);
-      await chmod(backupPath, 0o600);
-      const backup = new Database(backupPath, { readonly: true });
-      try {
-        if (backup.pragma('integrity_check', { simple: true }) !== 'ok' ||
-          (backup.pragma('foreign_key_check') as unknown[]).length || currentHash(backup) !== previous) {
-          throw new Error('SQLite backup verification failed. No credentials were changed.');
-        }
-      } finally { backup.close(); }
-    } catch (error) {
-      await unlink(backupPath).catch(() => {});
-      throw error;
-    }
+    const backupPath = await verifiedBackup(database, dataRoot, 'superadmin-before-setup',
+      backup => currentHash(backup) === previous);
 
     database.transaction(() => {
       const current = currentHash(database);
@@ -143,6 +165,7 @@ export function registerSuperadmin(app: FastifyInstance, database: NamiDatabase,
     return { people: actors.map(actor => ({
       id: actor.id, kind: actor.kind, displayName: actor.display_name,
       createdAt: actor.created_at, sessions: actor.sessions, photos: actor.photos,
+      canPermanentlyDelete: canDeleteGuest(database, actor.id),
       events: access.filter(item => item.actor_id === actor.id).map(item => ({ id: item.event_id, title: item.title, role: item.role })),
     })) };
   });
@@ -169,6 +192,39 @@ export function registerSuperadmin(app: FastifyInstance, database: NamiDatabase,
         .run(Date.now(), request.params.actorId);
       database.prepare('DELETE FROM event_access WHERE actor_id = ?').run(request.params.actorId);
       database.prepare('DELETE FROM sessions WHERE actor_id = ?').run(request.params.actorId);
+    })();
+    return reply.code(204).send();
+  });
+
+  app.post<{ Params: { actorId: string }; Body: { confirmName: string } }>('/api/superadmin/people/:actorId/delete', {
+    schema: { body: { type: 'object', additionalProperties: false, required: ['confirmName'],
+      properties: { confirmName: { type: 'string', maxLength: 80 } } } },
+    preHandler: [sameOrigin, adminOnly],
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const actor = database.prepare('SELECT kind, display_name FROM actors WHERE id = ?')
+      .get(request.params.actorId) as { kind: string; display_name: string } | undefined;
+    if (!actor) return reply.code(404).send({ error: 'Person not found.' });
+    if (actor.kind !== 'guest') return reply.code(403).send({ error: 'Only inactive guests can be permanently deleted.' });
+    if (actor.display_name !== request.body.confirmName) {
+      return reply.code(400).send({ error: 'The confirmation name did not match.' });
+    }
+    if (!canDeleteGuest(database, request.params.actorId)) {
+      return reply.code(409).send({ error: 'This guest still has access, a session, photos, an invitation, or an unfinished upload.' });
+    }
+    await verifiedBackup(database, dataRoot, 'guest-before-delete', backup =>
+      Boolean(backup.prepare('SELECT 1 FROM actors WHERE id = ? AND kind = ? AND display_name = ?')
+        .get(request.params.actorId, 'guest', actor.display_name)));
+    database.transaction(() => {
+      const current = database.prepare('SELECT display_name FROM actors WHERE id = ? AND kind = ?')
+        .get(request.params.actorId, 'guest') as { display_name: string } | undefined;
+      if (current?.display_name !== actor.display_name || !canDeleteGuest(database, request.params.actorId)) {
+        throw new Error('Guest state changed during deletion. No account was deleted.');
+      }
+      database.prepare('DELETE FROM invitations WHERE actor_id = ?').run(request.params.actorId);
+      database.prepare('DELETE FROM sessions WHERE actor_id = ?').run(request.params.actorId);
+      const deleted = database.prepare("DELETE FROM actors WHERE id = ? AND kind = 'guest'").run(request.params.actorId);
+      if (deleted.changes !== 1) throw new Error('Guest state changed during deletion. No account was deleted.');
     })();
     return reply.code(204).send();
   });
