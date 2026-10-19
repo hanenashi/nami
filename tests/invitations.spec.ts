@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { test, expect, type Page } from '@playwright/test';
+import sharp from 'sharp';
 
 const testPassphrase = 'violet harbor lantern willow';
 
@@ -27,7 +28,7 @@ async function signInAsOrganizer(page: Page) {
   await expect(page.getByRole('heading', { name: 'Hello, Stan.' })).toBeVisible();
 }
 
-test('invitation joins a guest to one event and revocation ends access', async ({ browser, page }, testInfo) => {
+test('a contributor joins, shares one JPEG, and loses access when revoked', async ({ browser, page }, testInfo) => {
   await signInAsOrganizer(page);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -55,6 +56,18 @@ test('invitation joins a guest to one event and revocation ends access', async (
   await expect(guestPage).toHaveURL(/\/events\/[0-9a-f-]+$/);
   await expect(guestPage.getByText('Hello, Aunt May')).toBeVisible();
   await expect(guestPage.getByText('You can add photographs')).toBeVisible();
+  const jpeg = await sharp({
+    create: { width: 80, height: 50, channels: 3, background: { r: 34, g: 82, b: 69 } },
+  }).jpeg({ quality: 88 }).toBuffer();
+  await guestPage.getByLabel('Choose one JPEG').setInputFiles({
+    name: 'synthetic-family-photo.jpg',
+    mimeType: 'image/jpeg',
+    buffer: jpeg,
+  });
+  await guestPage.getByRole('button', { name: 'Add photo' }).click();
+  await expect(guestPage.getByRole('img', { name: 'Shared by Aunt May' })).toBeVisible();
+  await expect(guestPage.getByRole('link', { name: /Download original/ })).toBeVisible();
+  expect(await guestPage.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
   const repeatContext = await browser.newContext(testInfo.project.use);
   const repeatPage = await repeatContext.newPage();
@@ -62,10 +75,12 @@ test('invitation joins a guest to one event and revocation ends access', async (
   await expect(repeatPage.getByText('Continue as Aunt May.')).toBeVisible();
   await repeatPage.getByRole('button', { name: 'Join event' }).click();
   await expect(repeatPage).toHaveURL(/\/events\/[0-9a-f-]+$/);
+  await expect(repeatPage.getByRole('img', { name: 'Shared by Aunt May' })).toBeVisible();
   expect(errors).toEqual([]);
 
   await page.reload();
   await expect(page.getByText('Contributor · Aunt May')).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Shared by Aunt May' })).toBeVisible();
   await page.getByRole('button', { name: 'Revoke' }).click();
   await expect(page.getByText('Contributor · Aunt May · Revoked')).toBeVisible();
   await guestPage.reload();

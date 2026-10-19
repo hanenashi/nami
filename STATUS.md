@@ -1,7 +1,7 @@
 # NAMI status
 
-2026-10-19 — M0 and M1 complete. Private events, scoped invitations and
-revocation work locally; the first complete photo path is next.
+2026-10-19 — M0 and M1 complete. Private events and scoped invitations work,
+and the first complete JPEG path now runs locally. Resumable batches come next.
 
 ## Working locally
 
@@ -21,10 +21,15 @@ revocation work locally; the first complete photo path is next.
   nickname redemption, repeat access and immediate organizer revocation.
 - Event-scoped guest details with clear contributor/viewer status and a
   responsive invitation flow.
+- One-at-a-time contributor/organizer JPEG upload through private staging, with
+  actual JPEG verification, SHA-256, exact original preservation, oriented
+  metadata-stripped preview, attribution and authorized original download.
+- Viewer gallery access with server-side denial of viewer uploads and all
+  cross-event media operations.
 
 ## Verified
 
-- `npm run check`: lint, typecheck, production builds and 6 API tests passed.
+- `npm run check`: lint, typecheck, production builds and 7 API tests passed.
 - `npm run test:e2e` against the local production build: 12 tests passed across
   Chromium desktop and WebKit iPad/iPhone profiles.
 - Health response, page title/content, keyboard and touch disclosure open/close,
@@ -89,6 +94,29 @@ revocation work locally; the first complete photo path is next.
   organizer, active session, test event and ownership row matched the snapshot
   afterward, while the guest-capable actor schema and empty invitation table
   were added. The upgraded service is healthy and the test event remains.
+- A generated JPEG with EXIF orientation survived upload byte-for-byte and
+  matched its stored SHA-256. Its preview had the corrected orientation and no
+  EXIF, originals/previews stayed mode `0600`, and staging was empty afterward.
+- Media API checks deny missing sessions, cross-origin writes, viewer writes and
+  cross-event IDs. Authorized viewers can see previews and download the exact
+  original bytes.
+- The contributor upload/gallery flow passed desktop Chromium and WebKit
+  iPad/iPhone profiles. Visual inspection at 1440×1000, 810×1080 and 390×664 CSS
+  pixels found readable controls and no remaining horizontal overflow.
+- A clean Docker image processed three generated JPEGs with Sharp/libvips. Every
+  stored size/hash matched, all previews were JPEGs without EXIF, and database
+  rows and files survived forced container recreation with no foreign-key errors.
+
+- Final JPEG verification also rejects oversized and multiple-file requests,
+  cleans their staging files, and revokes an in-flight real HTTP upload before
+  publication. The live database now contains two actors, one event, one
+  invitation and two photos; existing originals match their stored SHA-256.
+
+- Final live deployment is healthy and loopback-only. A fresh mode-`0600`
+  SQLite backup passed integrity/foreign-key checks. Existing actors, event,
+  invitation, access and media rows survived the update unchanged; both original
+  and preview file hashes matched the pre-update manifest. This snapshot is not
+  a complete media backup or disaster-recovery proof.
 
 ## Fixes during verification
 
@@ -102,17 +130,39 @@ revocation work locally; the first complete photo path is next.
 - Replaced native invitation `<select>` controls with large radio choices after
   WebKit exposed a browser-generated inline-style CSP violation. CSP remains
   strict and all three browser profiles pass.
+- Constrained WebKit's native file input after visual inspection found it could
+  force the iPhone upload card wider than the viewport; the browser test now
+  asserts the contributor page has no horizontal overflow.
 
 ## Not verified / not built
 
-No media ingestion, HEIC processing, gallery, automated backup/restore, public
-deployment or real family photos yet. No physical iPad/iPhone event-flow test
-yet. Current SSH-loopback invitation links work only on the tunneled Pixel, not
-on relatives' devices.
+No resumable or multi-file upload, HEIC/video processing, gallery lightbox,
+automated backup/restore or public deployment yet. Crash
+reconciliation for orphaned staging/files is still pending. No physical
+iPad/iPhone event-flow test yet. Current SSH-loopback invitation links work only
+on the tunneled Pixel, not on relatives' devices.
+
+
+## Platform direction
+
+NAMI targets Docker on Linux, Windows and macOS, with browser access from any
+supported device. Linux/Beechan is verified so far; Windows/macOS Docker and
+physical iPad/iPhone testing remain outstanding.
+
+Future Android/iOS apps should reuse React/TypeScript screens, the API client
+and application logic where practical. Capacitor is a candidate, not a current
+dependency or commitment. Keep file selection, sharing and background transfer
+behind small replaceable boundaries as those features arrive. No native apps
+are being built now, and browser background uploads are not guaranteed.
+
+Keep storage independent of the host: opaque keys and a configured local data
+root now, a replaceable storage implementation for optional cloud storage later.
+Extract only boundaries needed by the next feature; avoid speculative frameworks,
+cloud dependencies or broad abstractions.
 
 ## Next task
 
-Build one complete **JPEG vertical slice**: an authenticated contributor uploads
-one JPEG to persistent staging, NAMI verifies and preserves its exact bytes,
-creates a safe preview, shows it in the event, and serves the authorized
-original download. Reject viewer and cross-event attempts in the same slice.
+Begin M2 with persistent resumable upload sessions and owner/event authorization
+on create, HEAD, PATCH and cancellation. Verify interrupted transfer and API
+restart before adding a bulk queue. Probe HEIC support in the actual image early;
+JPEG remains the only accepted type until a decoder is verified.

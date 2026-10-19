@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
+import { request as httpRequest } from 'node:http';
+import { setTimeout as delay } from 'node:timers/promises';
+import { createHash } from 'node:crypto';
 import { test } from 'node:test';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
+import sharp from 'sharp';
 import { buildApp, dataDirectories } from '../src/app.js';
 import { openDatabase } from '../src/database.js';
 
@@ -392,4 +396,187 @@ test('invitation redemption is event-scoped, repeatable and revocable', async (t
   writableDatabase.prepare('UPDATE invitations SET expires_at = ? WHERE id = ?').run(Date.now() - 1, expiring.json().invitation.id);
   writableDatabase.close();
   assert.equal((await app.inject(`/api/invitations/${expiredSecret}`)).statusCode, 410);
+});
+
+test('a contributor can preserve one JPEG while viewer and cross-event writes are denied', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'nami-media-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const dataRoot = join(root, 'data');
+  const webRoot = join(root, 'web');
+  await mkdir(webRoot);
+  await writeFile(join(webRoot, 'index.html'), '<!doctype html><title>NAMI fixture</title>');
+  const app = await buildApp({ dataRoot, webRoot });
+  t.after(() => app.close());
+  const sameOriginHeaders = { host: 'nami.test', origin: 'http://nami.test' };
+
+  const setup = await app.inject({
+    method: 'POST', url: '/api/auth/setup', headers: sameOriginHeaders,
+    payload: { displayName: 'Organizer', password: 'a long test passphrase' },
+  });
+  const organizerCookie = String(setup.headers['set-cookie']).split(';', 1)[0];
+  const organizerHeaders = { ...sameOriginHeaders, cookie: organizerCookie };
+
+  async function createEvent(title: string) {
+    const response = await app.inject({
+      method: 'POST', url: '/api/events', headers: organizerHeaders,
+      payload: { title, startDate: '2026-10-19' },
+    });
+    return response.json().event.id as string;
+  }
+
+  async function makeGuest(eventId: string, role: 'contributor' | 'viewer', nickname: string) {
+    const invitation = await app.inject({
+      method: 'POST', url: `/api/events/${eventId}/invitations`, headers: organizerHeaders,
+      payload: { role },
+    });
+    const secret = (invitation.json().invitePath as string).split('/').at(-1)!;
+    const redeemed = await app.inject({
+      method: 'POST', url: `/api/invitations/${secret}/redeem`, headers: sameOriginHeaders,
+      payload: { nickname },
+    });
+    return String(redeemed.headers['set-cookie']).split(';', 1)[0];
+  }
+
+  function multipartPhoto(contents: Buffer, filename = 'synthetic.jpg') {
+    const boundary = `nami-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return {
+      headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      payload: Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="${filename}"\r\nContent-Type: image/jpeg\r\n\r\n`),
+        contents,
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]),
+    };
+  }
+
+  const eventA = await createEvent('Photo event');
+  const eventB = await createEvent('Other event');
+  const contributorCookie = await makeGuest(eventA, 'contributor', 'Cousin Sam');
+  const viewerCookie = await makeGuest(eventA, 'viewer', 'Aunt May');
+  assert.equal((await app.inject({ url: `/api/events/${eventA}/media` })).statusCode, 401);
+  const invalidMultipart = multipartPhoto(Buffer.from('not really a jpeg'));
+  const crossOrigin = await app.inject({
+    method: 'POST', url: `/api/events/${eventA}/media`,
+    headers: { host: 'nami.test', origin: 'http://elsewhere.test', cookie: contributorCookie, ...invalidMultipart.headers },
+    payload: invalidMultipart.payload,
+  });
+  assert.equal(crossOrigin.statusCode, 403);
+  const invalid = await app.inject({
+    method: 'POST', url: `/api/events/${eventA}/media`,
+    headers: { ...sameOriginHeaders, cookie: contributorCookie, ...invalidMultipart.headers },
+    payload: invalidMultipart.payload,
+  });
+  assert.equal(invalid.statusCode, 415);
+
+  const jpeg = await sharp({
+    create: { width: 40, height: 24, channels: 3, background: { r: 34, g: 82, b: 69 } },
+  }).withMetadata({ orientation: 6 }).jpeg({ quality: 90 }).toBuffer();
+  const photoMultipart = multipartPhoto(jpeg);
+  const uploaded = await app.inject({
+    method: 'POST', url: `/api/events/${eventA}/media`,
+    headers: { ...sameOriginHeaders, cookie: contributorCookie, ...photoMultipart.headers },
+    payload: photoMultipart.payload,
+  });
+  assert.equal(uploaded.statusCode, 201, uploaded.body);
+  const uploadedMedia = uploaded.json().media as { id: string; uploaderName: string };
+  assert.equal(uploadedMedia.uploaderName, 'Cousin Sam');
+
+  const mediaDatabase = new Database(join(dataRoot, 'db', 'nami.sqlite'), { readonly: true });
+  const storedHash = mediaDatabase.prepare('SELECT sha256 FROM media WHERE id = ?').get(uploadedMedia.id) as { sha256: string };
+  mediaDatabase.close();
+  assert.equal(storedHash.sha256, createHash('sha256').update(jpeg).digest('hex'));
+
+  const originalPath = join(dataRoot, 'originals', `${uploadedMedia.id}.jpg`);
+  const previewPath = join(dataRoot, 'previews', `${uploadedMedia.id}.jpg`);
+  assert.deepEqual(await readFile(originalPath), jpeg);
+  assert.equal((await stat(originalPath)).mode & 0o777, 0o600);
+  assert.equal((await stat(previewPath)).mode & 0o777, 0o600);
+  assert.deepEqual(await readdir(join(dataRoot, 'staging')), []);
+
+  const preview = await app.inject({
+    url: `/api/events/${eventA}/media/${uploadedMedia.id}/preview`, headers: { cookie: viewerCookie },
+  });
+  assert.equal(preview.statusCode, 200);
+  assert.equal(preview.headers['content-type'], 'image/jpeg');
+  const previewMetadata = await sharp(preview.rawPayload).metadata();
+  assert.equal(previewMetadata.width, 24);
+  assert.equal(previewMetadata.height, 40);
+  assert.equal(previewMetadata.exif, undefined);
+
+  const original = await app.inject({
+    url: `/api/events/${eventA}/media/${uploadedMedia.id}/original`, headers: { cookie: viewerCookie },
+  });
+  assert.equal(original.statusCode, 200);
+  assert.match(String(original.headers['content-disposition']), /^attachment;/);
+  assert.deepEqual(original.rawPayload, jpeg);
+  const listed = await app.inject({ url: `/api/events/${eventA}/media`, headers: { cookie: viewerCookie } });
+  assert.equal(listed.statusCode, 200);
+  assert.equal(listed.json().media[0].uploaderName, 'Cousin Sam');
+
+  const viewerMultipart = multipartPhoto(jpeg);
+  const viewerUpload = await app.inject({
+    method: 'POST', url: `/api/events/${eventA}/media`,
+    headers: { ...sameOriginHeaders, cookie: viewerCookie, ...viewerMultipart.headers },
+    payload: viewerMultipart.payload,
+  });
+  assert.equal(viewerUpload.statusCode, 403);
+  const wrongEventMultipart = multipartPhoto(jpeg);
+  const wrongEventUpload = await app.inject({
+    method: 'POST', url: `/api/events/${eventB}/media`,
+    headers: { ...sameOriginHeaders, cookie: contributorCookie, ...wrongEventMultipart.headers },
+    payload: wrongEventMultipart.payload,
+  });
+  assert.equal(wrongEventUpload.statusCode, 404);
+  const oversized = multipartPhoto(Buffer.concat([jpeg, Buffer.alloc(25 * 1024 * 1024)]));
+  assert.equal((await app.inject({
+    method: 'POST', url: `/api/events/${eventA}/media`,
+    headers: { ...sameOriginHeaders, cookie: contributorCookie, ...oversized.headers },
+    payload: oversized.payload,
+  })).statusCode, 413);
+  const multiple = Buffer.concat([
+    Buffer.from('--two-files\r\nContent-Disposition: form-data; name="photo"; filename="a.jpg"\r\nContent-Type: image/jpeg\r\n\r\n'),
+    jpeg,
+    Buffer.from('\r\n--two-files\r\nContent-Disposition: form-data; name="photo"; filename="b.jpg"\r\nContent-Type: image/jpeg\r\n\r\n'),
+    jpeg, Buffer.from('\r\n--two-files--\r\n'),
+  ]);
+  assert.equal((await app.inject({
+    method: 'POST', url: `/api/events/${eventA}/media`,
+    headers: { ...sameOriginHeaders, cookie: contributorCookie, 'content-type': 'multipart/form-data; boundary=two-files' },
+    payload: multiple,
+  })).statusCode, 400);
+  assert.deepEqual(await readdir(join(dataRoot, 'staging')), []);
+  assert.equal((await readdir(join(dataRoot, 'originals'))).length, 1);
+
+  // Hold a real HTTP transfer open, revoke its invitation, then finish sending.
+  const address = await app.listen({ host: '127.0.0.1', port: 0 });
+  let transfer!: ReturnType<typeof httpRequest>;
+  const response = new Promise<number>((resolve, reject) => {
+    transfer = httpRequest(`${address}/api/events/${eventA}/media`, {
+      method: 'POST',
+      headers: { origin: address, cookie: contributorCookie, ...photoMultipart.headers },
+    }, result => {
+      result.resume();
+      result.on('end', () => resolve(result.statusCode!));
+    });
+    transfer.on('error', reject);
+  });
+  transfer.write(photoMultipart.payload.subarray(0, photoMultipart.payload.length - 50));
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if ((await readdir(join(dataRoot, 'staging'))).length) break;
+    await delay(10);
+  }
+  assert.equal((await readdir(join(dataRoot, 'staging'))).length, 1);
+  const allInvites = await app.inject({ url: `/api/events/${eventA}/invitations`, headers: organizerHeaders });
+  const contributorInvite = allInvites.json().invitations.find((invite: { role: string }) => invite.role === 'contributor');
+  assert.equal((await app.inject({
+    method: 'POST', url: `/api/events/${eventA}/invitations/${contributorInvite.id}/revoke`, headers: organizerHeaders,
+  })).statusCode, 204);
+  transfer.end(photoMultipart.payload.subarray(photoMultipart.payload.length - 50));
+  assert.equal(await response, 403);
+  assert.deepEqual(await readdir(join(dataRoot, 'staging')), []);
+  assert.equal((await readdir(join(dataRoot, 'originals'))).length, 1);
+
+  assert.equal((await app.inject({
+    url: `/api/events/${eventB}/media/${uploadedMedia.id}/preview`, headers: { cookie: viewerCookie },
+  })).statusCode, 404);
 });

@@ -42,6 +42,20 @@ export type InvitationPreview = {
   redeemedAs: string | null;
 };
 
+export type NamiMedia = {
+  id: string;
+  originalName: string;
+  sizeBytes: number;
+  width: number;
+  height: number;
+  previewWidth: number;
+  previewHeight: number;
+  createdAt: number;
+  uploaderName: string;
+  previewPath: string;
+  downloadPath: string;
+};
+
 async function readJson<T extends object>(response: Response): Promise<T> {
   const body = await response.json() as T | { error?: string };
   if (!response.ok) {
@@ -128,5 +142,18 @@ export async function redeemInvitation(secret: string, nickname?: string) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ nickname }),
+  }));
+}
+
+export async function getMedia(eventId: string) {
+  return readJson<{ media: NamiMedia[] }>(await fetch(`/api/events/${encodeURIComponent(eventId)}/media`, { cache: 'no-store' }));
+}
+
+export async function uploadPhoto(eventId: string, photo: File) {
+  const body = new FormData();
+  body.append('photo', photo);
+  return readJson<{ media: NamiMedia }>(await fetch(`/api/events/${encodeURIComponent(eventId)}/media`, {
+    method: 'POST',
+    body,
   }));
 }

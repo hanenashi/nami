@@ -105,6 +105,25 @@ button:disabled { cursor: wait; opacity: .65; }
 .returning-guest { margin: 0; font-size: 19px; line-height: 1.6; }
 .guest-event { max-width: 900px; }
 .leave-event { margin-top: 56px; }
+.photos { margin-top: 72px; border-top: 1px solid var(--line); padding-top: 36px; }
+.photos-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+.photos-heading h2 { margin: 0; }
+.photos-heading .section-label { margin-bottom: 8px; }
+.photos-heading > span { color: #566a63; font-size: 16px; }
+.photo-upload { display: grid; min-width: 0; max-width: 760px; gap: 18px; margin-bottom: 42px; border: 1px solid var(--line); padding: 24px; background: #f5f8f6; }
+.file-choice { display: grid; min-width: 0; gap: 11px; font-size: 18px; font-weight: 600; }
+.file-choice input { width: 100%; min-width: 0; max-width: 100%; min-height: 52px; overflow: hidden; border: 1px solid #81958e; padding: 7px; color: #17342c; background: #fff; font: inherit; font-size: 16px; }
+.file-choice input::file-selector-button { min-height: 36px; margin-right: 12px; border: 0; padding-inline: 14px; color: #fff; background: #203e36; font: inherit; font-weight: 600; cursor: pointer; }
+.file-choice input:focus-visible { outline: 3px solid #203e36; outline-offset: 3px; }
+.photo-upload small, .viewer-note, .empty-gallery { color: #566a63; font-size: 16px; line-height: 1.6; }
+.viewer-note { margin: 0 0 34px; }
+.empty-gallery { margin: 0; border-block: 1px solid var(--line); padding-block: 26px; }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 24px; margin: 0; padding: 0; list-style: none; }
+.photo-grid figure { height: 100%; margin: 0; border: 1px solid var(--line); background: #f5f8f6; }
+.photo-grid img { display: block; width: 100%; height: auto; max-height: 520px; object-fit: contain; background: #e8efec; }
+.photo-grid figcaption { display: grid; gap: 10px; padding: 16px; font-size: 15px; line-height: 1.5; }
+.photo-grid figcaption a { justify-self: start; font-weight: 600; text-underline-offset: 4px; }
+.photo-grid figcaption a:focus-visible { outline: 3px solid #203e36; outline-offset: 3px; }
 @media (max-width: 600px) {
   .page { width: calc(100% - 40px); }
   .masthead { padding-block: 24px 20px; }
@@ -132,4 +151,7 @@ button:disabled { cursor: wait; opacity: .65; }
   .new-invitation .secondary-button { justify-self: stretch; }
   .invitation-history li { align-items: flex-start; flex-direction: column; gap: 8px; padding-block: 18px; }
   .small-button { min-width: 80px; text-align: left; }
+  .photos-heading { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .photo-upload { padding: 20px; }
+  .photo-upload .primary-button { justify-self: stretch; }
 }

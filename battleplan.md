@@ -90,6 +90,24 @@ Avoid Redis, Kubernetes, microservices and elaborate queues unless evidence call
 
 Library/codec support varies by build: test actual HEIC/HEIF support and document required system codecs. If preview cannot be generated, keep the original and show a processing error; do not pretend success.
 
+
+## Platform direction
+
+NAMI targets Docker on Linux, Windows and macOS, with browser access from any
+supported device. Linux/Beechan is verified so far; Windows/macOS Docker and
+physical iPad/iPhone testing remain outstanding.
+
+Future Android/iOS apps should reuse React/TypeScript screens, the API client
+and application logic where practical. Capacitor is a candidate, not a current
+dependency or commitment. Keep file selection, sharing and background transfer
+behind small replaceable boundaries as those features arrive. No native apps
+are being built now, and browser background uploads are not guaranteed.
+
+Keep storage independent of the host: opaque keys and a configured local data
+root now, a replaceable storage implementation for optional cloud storage later.
+Extract only boundaries needed by the next feature; avoid speculative frameworks,
+cloud dependencies or broad abstractions.
+
 ## 5. Data model and disk layout
 
 Configurable data root (outside Git and ignored entirely):
@@ -223,6 +241,13 @@ Backup design must coordinate the database snapshot with original files and GC.
 - [x] Usable responsive event UI.
 
 **Exit:** guest can only access entitled event; viewer cannot upload; revocation works.
+
+### First photo vertical slice (before bulk upload)
+- [x] Stream one contributor/organizer JPEG through private bounded staging.
+- [x] Verify JPEG signature/decode, hash it and preserve the exact original bytes.
+- [x] Generate an oriented metadata-stripped preview and show contributor attribution.
+- [x] Authorize event-scoped preview and original download; deny viewer uploads.
+- [x] Verify the complete flow in Docker and desktop/iPad/iPhone browser profiles.
 
 ### M2 — Resumable bulk upload
 - [ ] Uppy queue and clear per-file/total progress.

@@ -11,11 +11,12 @@ A small, self-hostable place for family and friends to share photographs from
 one gathering. The first testers use an iPad and iPhone; simple screens and
 Safari compatibility come first.
 
-Milestone **M1, private events and invitations, is complete**. An organizer can
-create an event, make a viewer or contributor link, see who redeemed it and
-revoke that person's access. The next slice is one complete JPEG path: upload,
-preserve the original, make a preview and download it again. NAMI is not ready
-to accept family photographs or internet traffic yet.
+Milestone **M1, private events and invitations, is complete**, along with the
+first complete photo path. An organizer or invited contributor can add one JPEG
+at a time; NAMI preserves its exact bytes, makes a separate preview, shows who
+shared it and provides an authorized original download. Resumable batches and
+other photo/video formats come next. NAMI is not ready for family photographs
+or internet traffic yet.
 
 ## Start on Beechan
 
@@ -101,8 +102,9 @@ The first build needs internet access to download the Node image and packages.
 ## Data and configuration
 
 Compose defaults to `../nami-data` outside the checkout. It contains `db/`,
-`staging/`, `originals/`, `previews/`, and `backups/`; M0 only creates these empty
-directories. The mount must already exist so Docker cannot silently create a
+`staging/`, `originals/`, `previews/`, and `backups/`. Uploaded bytes pass through
+private staging; accepted originals and generated previews remain outside the
+web root. The mount must already exist so Docker cannot silently create a
 root-owned data folder. The container runs as an unprivileged user.
 
 Optionally copy `.env.example` to `.env`, make it mode `0600`, and edit its
@@ -120,8 +122,11 @@ hashed with scrypt; session cookies are HttpOnly and their raw values are not
 stored in the database. Invitation secrets are also stored only as hashes. Each
 link grants one event role, remembers the first nickname used, and can be
 revoked by the organizer; anyone who receives the link can use that access until
-then. The same-disk `backups/` folder is not disaster recovery; backup/restore
-remains unimplemented and is required before real family use.
+then. The current upload accepts one JPEG up to 25 MB, verifies the actual file,
+stores its SHA-256, and generates a metadata-stripped preview. Original downloads
+retain the exact uploaded bytes and may therefore retain EXIF/GPS. The same-disk
+`backups/` folder is not disaster recovery; backup/restore remains unimplemented
+and is required before real family use.
 
 ## Development and checks
 
@@ -141,7 +146,8 @@ Browser tests start a temporary server on `127.0.0.1:3100` with disposable data,
 then stop it and remove that data. They cover Chromium desktop and WebKit with
 iPad/iPhone device settings, including organizer setup, logout, repeat login,
 creating and reopening an event, guest redemption, repeat access and revocation.
-WebKit emulation is not a physical Safari test.
+The contributor flow also uploads a generated JPEG and displays its preview on
+the organizer and guest screens. WebKit emulation is not a physical Safari test.
 Some Linux hosts need Playwright's system libraries; use
 `sudo npx playwright install-deps chromium webkit` when the browser installer
 reports missing dependencies. Test results go to
@@ -166,6 +172,24 @@ npm run dev:web
 The API uses `127.0.0.1:3000`; Vite uses `127.0.0.1:5173` and proxies `/api` to it.
 Stop the Docker instance first to free port 3000. Run `npm start` instead of the
 two development commands to serve the production build without Docker.
+
+
+## Platform direction
+
+NAMI targets Docker on Linux, Windows and macOS, with browser access from any
+supported device. Linux/Beechan is verified so far; Windows/macOS Docker and
+physical iPad/iPhone testing remain outstanding.
+
+Future Android/iOS apps should reuse React/TypeScript screens, the API client
+and application logic where practical. Capacitor is a candidate, not a current
+dependency or commitment. Keep file selection, sharing and background transfer
+behind small replaceable boundaries as those features arrive. No native apps
+are being built now, and browser background uploads are not guaranteed.
+
+Keep storage independent of the host: opaque keys and a configured local data
+root now, a replaceable storage implementation for optional cloud storage later.
+Extract only boundaries needed by the next feature; avoid speculative frameworks,
+cloud dependencies or broad abstractions.
 
 ## Project layout
 

@@ -6,6 +6,7 @@ import {
   getEvent,
   getEvents,
   getInvitations,
+  getMedia,
   loginOrganizer,
   logoutOrganizer,
   revokeInvitation,
@@ -13,8 +14,10 @@ import {
   type AuthStatus,
   type Invitation,
   type NamiEvent,
+  type NamiMedia,
 } from './api.js';
 import { formatEventDates, formatTimestampDate } from './dates.js';
+import { EventPhotos } from './Photos.js';
 
 type SubmitState = 'idle' | 'working';
 
@@ -374,14 +377,16 @@ function OrganizerHome({ displayName, onLogout }: { displayName: string; onLogou
 function EventDetail({ eventId }: { eventId: string }) {
   const [event, setEvent] = useState<NamiEvent | null>(null);
   const [invitations, setInvitations] = useState<Invitation[] | null>(null);
+  const [media, setMedia] = useState<NamiMedia[] | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let ignore = false;
-    Promise.all([getEvent(eventId), getInvitations(eventId)]).then(([eventResult, invitationResult]) => {
+    Promise.all([getEvent(eventId), getInvitations(eventId), getMedia(eventId)]).then(([eventResult, invitationResult, mediaResult]) => {
       if (!ignore) {
         setEvent(eventResult.event);
         setInvitations(invitationResult.invitations);
+        setMedia(mediaResult.media);
       }
     }).catch(reason => {
       if (!ignore) setError(reason instanceof Error ? reason.message : 'Couldn’t load this event.');
@@ -397,7 +402,7 @@ function EventDetail({ eventId }: { eventId: string }) {
       </section>
     );
   }
-  if (!event || !invitations) return <p className="page-message">Opening event…</p>;
+  if (!event || !invitations || !media) return <p className="page-message">Opening event…</p>;
 
   return (
     <article className="event-detail">
@@ -406,11 +411,8 @@ function EventDetail({ eventId }: { eventId: string }) {
       <h1>{event.title}</h1>
       <p className="event-date">{formatEventDates(event)}</p>
       {event.description ? <p className="event-description">{event.description}</p> : null}
+      <EventPhotos eventId={event.id} role="organizer" initialMedia={media} />
       <InvitationsPanel eventId={event.id} initialInvitations={invitations} />
-      <section className="event-coming-next" aria-labelledby="photos-heading">
-        <h2 id="photos-heading">Shared photos</h2>
-        <p>Photos will appear here when uploading arrives.</p>
-      </section>
     </article>
   );
 }

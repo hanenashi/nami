@@ -1,14 +1,17 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   getEvent,
+  getMedia,
   getInvitationPreview,
   logoutOrganizer,
   redeemInvitation,
   type EventAccess,
   type InvitationPreview,
   type NamiEvent,
+  type NamiMedia,
 } from './api.js';
 import { formatEventDates } from './dates.js';
+import { EventPhotos } from './Photos.js';
 
 export function InvitationPage({ secret }: { secret: string }) {
   const [invitation, setInvitation] = useState<InvitationPreview | null>(null);
@@ -71,15 +74,17 @@ export function InvitationPage({ secret }: { secret: string }) {
 export function GuestEvent({ eventId }: { eventId: string }) {
   const [event, setEvent] = useState<NamiEvent | null>(null);
   const [access, setAccess] = useState<EventAccess | null>(null);
+  const [media, setMedia] = useState<NamiMedia[] | null>(null);
   const [error, setError] = useState('');
   const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
     let ignore = false;
-    getEvent(eventId).then(result => {
+    Promise.all([getEvent(eventId), getMedia(eventId)]).then(([eventResult, mediaResult]) => {
       if (!ignore) {
-        setEvent(result.event);
-        setAccess(result.access);
+        setEvent(eventResult.event);
+        setAccess(eventResult.access);
+        setMedia(mediaResult.media);
       }
     }).catch(reason => {
       if (!ignore) setError(reason instanceof Error ? reason.message : 'This event could not be opened.');
@@ -99,9 +104,9 @@ export function GuestEvent({ eventId }: { eventId: string }) {
   }
 
   if (error && !event) return <p className="page-message" role="alert">{error}</p>;
-  if (!event || !access) return <p className="page-message">Opening event…</p>;
+  if (!event || !access || !media) return <p className="page-message">Opening event…</p>;
   const accessMessage = access.role === 'contributor'
-    ? 'You can add photographs when uploading arrives in the next milestone.'
+    ? 'You can add photographs to this event.'
     : access.role === 'viewer'
       ? 'You have view-only access to this event.'
       : 'You are organizing this event.';
@@ -116,6 +121,7 @@ export function GuestEvent({ eventId }: { eventId: string }) {
         <h2 id="guest-access-heading">You’re part of this event</h2>
         <p>{accessMessage}</p>
       </section>
+      <EventPhotos eventId={event.id} role={access.role} initialMedia={media} />
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       <button className="text-button leave-event" type="button" onClick={leave} disabled={leaving}>
         {leaving ? 'Leaving…' : 'Leave event'}

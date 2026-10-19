@@ -123,6 +123,24 @@ export function openDatabase(dataRoot: string): NamiDatabase {
     );
 
     CREATE INDEX IF NOT EXISTS invitations_by_event ON invitations (event_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS media (
+      id TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      uploaded_by TEXT NOT NULL REFERENCES actors(id) ON DELETE RESTRICT,
+      original_name TEXT NOT NULL,
+      media_type TEXT NOT NULL CHECK (media_type = 'image/jpeg'),
+      size_bytes INTEGER NOT NULL CHECK (size_bytes > 0),
+      sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
+      width INTEGER NOT NULL CHECK (width > 0),
+      height INTEGER NOT NULL CHECK (height > 0),
+      preview_width INTEGER NOT NULL CHECK (preview_width > 0),
+      preview_height INTEGER NOT NULL CHECK (preview_height > 0),
+      preview_size_bytes INTEGER NOT NULL CHECK (preview_size_bytes > 0),
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS media_by_event ON media (event_id, created_at);
   `);
   return database;
 }
