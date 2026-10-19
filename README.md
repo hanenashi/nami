@@ -17,8 +17,15 @@ action for one or many JPEGs. NAMI preserves their exact bytes, makes separate
 previews and shows a photo-first album with a full-screen viewer and authorized
 original downloads. Uploads proceed sequentially and can resume after an
 interruption when the same files are selected again. Other photo and video
-formats come later. NAMI is not ready for real family photographs or internet
-traffic yet.
+formats come later. NAMI is not ready for real family photographs or public
+internet exposure yet.
+
+The next milestone is an **isolated private technical beta** on Beechan: a
+second Docker instance and data root, private HTTPS through Tailscale, and
+disposable-photo tests. It is planned, not deployed. The existing development
+instance at `127.0.0.1:3000` and its data stay intact. Testers will need
+Tailscale for this stage; ordinary no-installation family links belong to the
+later family pilot. See the [deployment stages and immediate roadmap](battleplan.md#8-deployment-stages-and-immediate-roadmap).
 
 If the exact same JPEG is selected again for the same event, NAMI keeps the
 existing tile and original rather than adding another copy. The album reports

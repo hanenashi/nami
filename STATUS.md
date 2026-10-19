@@ -531,3 +531,22 @@ only accepted format now.
   from Termux. Reloading the real Pixel Chrome tab loaded the new JavaScript,
   showed `pokus` and its existing photo, and produced no page errors. A second
   real JPEG selection has not yet been tested on that device.
+
+## Next milestone agreed 2026-10-20 — isolated private technical beta
+
+- This is a documented plan only. No beta container, data root, Serve route,
+  policy grant, tester invitation or public exposure was created in this step.
+  Development NAMI continues on loopback port 3000 with its existing data.
+- Read-only inspection found Beechan's existing Tailscale Serve root already
+  proxies another local service. Stage 1 must preserve that route; a separate
+  HTTPS port (proposed 8443) can serve beta NAMI at `/` without changing its
+  root-relative URLs. The existing tailnet grants have not been inspected or
+  tested from an external tester identity yet.
+- The immediate work order is in `battleplan.md` §8: isolate Compose project,
+  storage and backups on loopback port 3001; pin a tested revision; configure
+  Secure cookies; verify login, invitations, uploads, downloads, permissions,
+  negative access checks and backup/restore/update/rollback through private
+  HTTPS. Use disposable photos and stop before inviting testers.
+- Family pilot follows only after a separate decision and readiness review:
+  no-VPN links, off-site automated backups, restore proof, monitoring and
+  recovery guidance. No public deployment or paid service is authorized.

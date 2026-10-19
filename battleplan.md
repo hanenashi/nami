@@ -3,7 +3,7 @@
 > **NAMI / なみ / mezi námi** — memories made together.  
 > Repository: https://github.com/hanenashi/nami  
 > Existing README motto: **photo sharing done terribly right**  
-> State: local-first MVP in progress · Updated: 2026-10-19
+> State: private JPEG base running; isolated technical beta planned · Updated: 2026-10-20
 
 ## 0. Beechan / Codex handoff
 
@@ -185,15 +185,58 @@ Removing an item from an event removes its event association, not a still-refere
 - Preview metadata must not publish GPS. Explain that original downloads may retain EXIF/GPS.
 - TLS, upload limits, abuse mitigation, backup and restoration must pass before external family beta.
 
-## 8. Local development, Beechan and deployment
+## 8. Deployment stages and immediate roadmap
 
-Sequence:
-1. **Local-only build:** Windows 11 PC or Beechan using Docker; test via localhost with disposable assets.
-2. **Beechan beta rehearsal:** Debian server runs the same Compose setup with persistent bind mounts; access from Pixel through trusted LAN/Tailscale.
-3. **Explicitly approved small external beta:** HTTPS tunnel/reverse proxy, ordinary browser access for relatives, proper firewall/permissions/quota, off-machine backup.
-4. **Optional later hosting:** migrate same service to low-cost VPS and/or S3-compatible object storage. Do not buy anything for M0–M4.
+| Stage | Audience and access | Gate |
+|---|---|---|
+| 0 — Current development | Beechan Docker on `127.0.0.1:3000`; Pixel through a private SSH tunnel | Keep current data and fast iteration intact. |
+| 1 — Next: private technical beta | Separate `nami-beta` Docker project on `127.0.0.1:3001`, separate persistent data and backups; private HTTPS through Tailscale Serve for 2–5 trusted Pixel/iPhone/iPad testers | Prove isolation, access restrictions, HTTPS flows and recovery before inviting anyone. Use disposable photos. |
+| 2 — Family pilot | Roughly 10–20 invited people using ordinary HTTPS links without VPN, installation or Google/Apple login | Explicit approval for internet access; security review, off-site automated backups, restore test, monitoring and recovery instructions first. Prefer Beechan if practical; evaluate a secure tunnel/reverse proxy against a small VPS. |
+| 3 — Publicly reachable self-hosted NAMI | Portable Docker Compose installation on Linux, Windows and macOS, stable domain and HTTPS | Events remain private; document hardening, storage migration, backups and controlled updates. |
+| 4 — Growth, only if needed | Larger albums and more users | Evaluate VPS hosting, object storage, CDN, background processing and shared-code Android/iOS apps without locking hosting or storage to one provider. |
 
-Compose needs persistent host volumes for database, originals, staging, previews. Bind web port to **127.0.0.1 by default**, with deliberate opt-in LAN binding. For public hosting use HTTPS and secure cookie configuration. Tailscale is for developer access, never required for relatives.
+Stage 1 is a technical test, not the low-friction family invitation experience.
+Testers need Tailscale on their devices and access to the beta's HTTPS port.
+Keep the existing development Compose project, data root and port unchanged. A
+separate Compose project and data root must never reuse its SQLite database,
+uploads, originals or backups. Pin the beta to a verified revision or image so
+updating and rolling it back cannot silently change development.
+
+Beechan already has a different service at the root of its Tailscale Serve
+HTTPS configuration. Inspect and save that configuration and the complete
+tailnet access policy before making changes. A separate HTTPS port (proposed:
+8443) avoids replacing the existing root route and lets NAMI use `/` with its
+current root-relative URLs. Use Serve only, never Funnel. Serve and Docker
+isolation alone do not limit a shared tester's access to Beechan: review all
+grants, including broad rules, and verify from a tester identity that only the
+beta port is reachable. [Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve)
+and [sharing/access rules](https://tailscale.com/docs/features/sharing) describe
+these controls. Do not add testers to the tailnet or share Beechan until these
+checks pass and the owner chooses the first testers.
+
+Immediate Stage 1 sequence:
+
+1. Record the existing Serve route, tailnet policy, development data counts,
+   Docker state and listening ports without changing them.
+2. Create a separately named Compose project and mode-0700 data root for the
+   beta. Bind only to `127.0.0.1:3001`; set secure cookies for HTTPS. Use an
+   independent organizer and disposable JPEGs. Keep configuration and secrets
+   out of Git.
+3. Prove local health and data isolation, then add only the beta's private
+   Serve HTTPS port. Confirm the existing Serve route is unchanged.
+4. Through HTTPS, test organizer setup/login, invitation redemption and repeat
+   access, JPEG upload/resume/deduplication, preview and original download,
+   revoked/viewer/cross-event denials, Secure cookies and same-origin writes.
+5. Test full backup with SQLite consistency and original-file hashes, restore
+   into a clean data root, container restart, update and rollback. Confirm both
+   instances remain separate and healthy after each operation.
+6. Record the verified beta URL, access requirements and remaining risks. Stop
+   before sharing the node, inviting testers or enabling public access.
+
+Compose must keep persistent host volumes for the database, originals,
+staging, uploads, previews and backups, with loopback binding by default.
+Physical iPad/iPhone and real Pixel testing remain important once access is
+approved. The family pilot must remove the Tailscale onboarding step.
 
 Provide .env.example (no secrets), .gitignore, healthcheck, data location explanation, start/stop/update/rebuild instructions. Verify actual host constraints; do not assume Beechan's CPU, RAM, packages or disk capacity.
 
@@ -203,7 +246,10 @@ Provide .env.example (no secrets), .gitignore, healthcheck, data location explan
 - Include file-hash manifest and verify sample files after restore.
 - Test restoration into a **separate clean data root**; ensure event links, access rules and galleries are preserved.
 - Previews may be regenerated; originals, DB, event associations and access rules are essential.
-- Local data/backups on the same disk are not sufficient for disaster recovery; a second independent machine/disk/location is required before the family beta.
+- Local data/backups on the same disk are not sufficient for disaster recovery;
+  a second independent machine/disk/location is required before the family
+  pilot or valued photographs. Stage 1 uses disposable photos while recovery
+  is being verified.
 - Media and backups remain outside Git history.
 
 ## 10. Implementation milestones (one at a time)
@@ -378,15 +424,11 @@ Possible later: curated highlights, permanent members, album views across events
 - Real-world phone/browser video codec support.
 - Hosting geography/costs and offsite backup once local beta has proven useful.
 
-## 14. FIRST IMMEDIATE TASK FOR BEECHAN
+## 14. NEXT IMMEDIATE TASK FOR BEECHAN
 
-**Implement M0 only, verify it genuinely runs, then commit.** Make local setup reproducible, with clear instructions for Stan (who should not need to know programming). Demonstrate NAMI landing page and API healthcheck, do a clean Docker start and smoke test.
-
-At the end, report:
-1. What actually runs and where.
-2. Exact copy-paste commands to launch, test and stop it.
-3. Test commands and real results.
-4. Bugs/blockers and how you resolved or isolated them.
-5. The **single next concrete task** for M1.
-
-Do not jump ahead to a monolithic untestable implementation. NAMI should become reliable one working slice at a time.
+Implement **Stage 1 only**, following the sequence in §8. Start with read-only
+inspection of the existing Serve route and tailnet policy, then create the
+isolated beta and prove its HTTPS and recovery paths using disposable data.
+Keep development untouched. Record exact tests and results in STATUS.md,
+commit and push verified configuration/docs. Stop before inviting testers or
+opening NAMI to the public internet.
