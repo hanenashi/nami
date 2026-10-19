@@ -1,15 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   createEvent,
+  createInvitation,
   getAuthStatus,
   getEvent,
   getEvents,
+  getInvitations,
   loginOrganizer,
   logoutOrganizer,
+  revokeInvitation,
   setupOrganizer,
   type AuthStatus,
+  type Invitation,
   type NamiEvent,
 } from './api.js';
+import { formatEventDates, formatTimestampDate } from './dates.js';
 
 type SubmitState = 'idle' | 'working';
 
@@ -119,17 +124,6 @@ function Login({ onComplete }: { onComplete: (status: AuthStatus) => void }) {
   );
 }
 
-function formatCalendarDate(value: string) {
-  const [year, month, day] = value.split('-').map(Number);
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(new Date(year, month - 1, day));
-}
-
-function formatEventDates(event: NamiEvent) {
-  const start = formatCalendarDate(event.startDate);
-  if (!event.endDate || event.endDate === event.startDate) return start;
-  return `${start} – ${formatCalendarDate(event.endDate)}`;
-}
-
 function EventForm({ onCreated }: { onCreated: (event: NamiEvent) => void }) {
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [error, setError] = useState('');
@@ -182,6 +176,131 @@ function EventForm({ onCreated }: { onCreated: (event: NamiEvent) => void }) {
           {submitState === 'working' ? 'Creating…' : 'Create event'}
         </button>
       </form>
+    </section>
+  );
+}
+
+function invitationDescription(invitation: Invitation) {
+  const role = invitation.role === 'contributor' ? 'Contributor' : 'Viewer';
+  const guest = invitation.guestName ? ` · ${invitation.guestName}` : '';
+  if (invitation.status === 'revoked') return `${role}${guest} · Revoked`;
+  if (invitation.status === 'expired') return `${role}${guest} · Link expired`;
+  if (invitation.guestName) return `${role} · ${invitation.guestName}`;
+  return `${role} · Waiting to be opened`;
+}
+
+function InvitationsPanel({ eventId, initialInvitations }: { eventId: string; initialInvitations: Invitation[] }) {
+  const [invitations, setInvitations] = useState(initialInvitations);
+  const [newLink, setNewLink] = useState('');
+  const [working, setWorking] = useState(false);
+  const [revoking, setRevoking] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState('');
+
+  async function create(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setWorking(true);
+    setError('');
+    setCopied(false);
+    const form = new FormData(event.currentTarget);
+    const expiry = String(form.get('expiry') ?? '');
+    try {
+      const result = await createInvitation(eventId, {
+        role: String(form.get('role')) as 'contributor' | 'viewer',
+        expiresInDays: expiry ? Number(expiry) : undefined,
+      });
+      setInvitations(current => [result.invitation, ...current]);
+      setNewLink(`${location.origin}${result.invitePath}`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Couldn’t create the invitation.');
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(newLink);
+      setCopied(true);
+    } catch {
+      setError('Select the invitation link and copy it manually.');
+    }
+  }
+
+  async function revoke(invitationId: string) {
+    setRevoking(invitationId);
+    setError('');
+    try {
+      await revokeInvitation(eventId, invitationId);
+      setInvitations(current => current.map(invitation => (
+        invitation.id === invitationId ? { ...invitation, status: 'revoked' } : invitation
+      )));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Couldn’t revoke the invitation.');
+    } finally {
+      setRevoking('');
+    }
+  }
+
+  return (
+    <section className="invitation-panel" aria-labelledby="invitations-heading">
+      <h2 id="invitations-heading">Invite someone</h2>
+      <p>Create a private link for one person. You can revoke it whenever you need to.</p>
+      <form className="invitation-form" onSubmit={create}>
+        <fieldset className="choice-group">
+          <legend>They can</legend>
+          <div className="choice-options">
+            <label className="choice"><input type="radio" name="role" value="contributor" defaultChecked /> <span>Add and view photos</span></label>
+            <label className="choice"><input type="radio" name="role" value="viewer" /> <span>View photos only</span></label>
+          </div>
+        </fieldset>
+        <fieldset className="choice-group">
+          <legend>Link expires</legend>
+          <div className="choice-options">
+            <label className="choice"><input type="radio" name="expiry" value="7" /> <span>In 7 days</span></label>
+            <label className="choice"><input type="radio" name="expiry" value="30" defaultChecked /> <span>In 30 days</span></label>
+            <label className="choice"><input type="radio" name="expiry" value="" /> <span>Never</span></label>
+          </div>
+        </fieldset>
+        <button className="primary-button" type="submit" disabled={working}>
+          {working ? 'Creating…' : 'Create invitation'}
+        </button>
+      </form>
+      {newLink ? (
+        <div className="new-invitation" role="status">
+          <strong>Invitation ready</strong>
+          <label className="field">
+            <span>Copy this link now</span>
+            <input aria-label="Invitation link" type="text" value={newLink} readOnly onFocus={event => event.currentTarget.select()} />
+          </label>
+          <button className="secondary-button" type="button" onClick={copyLink}>{copied ? 'Copied' : 'Copy link'}</button>
+          <small>During local testing, the link opens only on a device connected to this NAMI address.</small>
+        </div>
+      ) : null}
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {invitations.length > 0 ? (
+        <div className="invitation-history">
+          <h3>Invitations</h3>
+          <ul>
+            {invitations.map(invitation => (
+              <li key={invitation.id}>
+                <div>
+                  <strong>{invitationDescription(invitation)}</strong>
+                  <span>
+                    {invitation.expiresAt ? `Expires ${formatTimestampDate(invitation.expiresAt)}` : 'No expiry'}
+                    {invitation.redemptionCount > 1 ? ` · Opened ${invitation.redemptionCount} times` : ''}
+                  </span>
+                </div>
+                {invitation.status === 'active' || invitation.status === 'redeemed' ? (
+                  <button className="small-button" type="button" onClick={() => revoke(invitation.id)} disabled={revoking === invitation.id}>
+                    {revoking === invitation.id ? 'Revoking…' : 'Revoke'}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -254,12 +373,16 @@ function OrganizerHome({ displayName, onLogout }: { displayName: string; onLogou
 
 function EventDetail({ eventId }: { eventId: string }) {
   const [event, setEvent] = useState<NamiEvent | null>(null);
+  const [invitations, setInvitations] = useState<Invitation[] | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let ignore = false;
-    getEvent(eventId).then(result => {
-      if (!ignore) setEvent(result.event);
+    Promise.all([getEvent(eventId), getInvitations(eventId)]).then(([eventResult, invitationResult]) => {
+      if (!ignore) {
+        setEvent(eventResult.event);
+        setInvitations(invitationResult.invitations);
+      }
     }).catch(reason => {
       if (!ignore) setError(reason instanceof Error ? reason.message : 'Couldn’t load this event.');
     });
@@ -274,7 +397,7 @@ function EventDetail({ eventId }: { eventId: string }) {
       </section>
     );
   }
-  if (!event) return <p className="page-message">Opening event…</p>;
+  if (!event || !invitations) return <p className="page-message">Opening event…</p>;
 
   return (
     <article className="event-detail">
@@ -283,9 +406,10 @@ function EventDetail({ eventId }: { eventId: string }) {
       <h1>{event.title}</h1>
       <p className="event-date">{formatEventDates(event)}</p>
       {event.description ? <p className="event-description">{event.description}</p> : null}
-      <section className="event-coming-next" aria-labelledby="sharing-heading">
-        <h2 id="sharing-heading">Share it together</h2>
-        <p>Invitations and photos will appear here.</p>
+      <InvitationsPanel eventId={event.id} initialInvitations={invitations} />
+      <section className="event-coming-next" aria-labelledby="photos-heading">
+        <h2 id="photos-heading">Shared photos</h2>
+        <p>Photos will appear here when uploading arrives.</p>
       </section>
     </article>
   );

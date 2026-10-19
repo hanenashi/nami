@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { copy } from './copy.js';
 import { Organizer } from './Organizer.js';
+import { GuestEvent, InvitationPage } from './Invitation.js';
 import './styles.css';
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -49,9 +50,14 @@ function Welcome() {
 }
 
 function App() {
-  return location.pathname === '/organizer' || location.pathname.startsWith('/organizer/events/')
-    ? <Shell><Organizer /></Shell>
-    : <Welcome />;
+  if (location.pathname === '/organizer' || location.pathname.startsWith('/organizer/events/')) {
+    return <Shell><Organizer /></Shell>;
+  }
+  const invitationMatch = /^\/invite\/([^/]+)$/.exec(location.pathname);
+  if (invitationMatch) return <Shell><InvitationPage secret={invitationMatch[1]} /></Shell>;
+  const eventMatch = /^\/events\/([^/]+)$/.exec(location.pathname);
+  if (eventMatch) return <Shell><GuestEvent eventId={eventMatch[1]} /></Shell>;
+  return <Welcome />;
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);

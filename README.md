@@ -11,10 +11,11 @@ A small, self-hostable place for family and friends to share photographs from
 one gathering. The first testers use an iPad and iPhone; simple screens and
 Safari compatibility come first.
 
-Current milestone: **M1, private events and invitations**. Local organizer setup,
-login, event creation and event details work. Invitations, uploads and galleries
-do not exist yet. This is not ready to accept family photographs or internet
-traffic.
+Milestone **M1, private events and invitations, is complete**. An organizer can
+create an event, make a viewer or contributor link, see who redeemed it and
+revoke that person's access. The next slice is one complete JPEG path: upload,
+preserve the original, make a preview and download it again. NAMI is not ready
+to accept family photographs or internet traffic yet.
 
 ## Start on Beechan
 
@@ -41,6 +42,18 @@ First visit: open **http://127.0.0.1:3000/organizer**, enter your name, and choo
 a passphrase of at least 12 characters. This creates the single organizer
 account. Later visits show the sign-in form. There is no email recovery yet, so
 store the passphrase in your password manager.
+
+For the current private Pixel test, keep this SSH tunnel open in Termux:
+
+```sh
+ssh -N -L 33000:127.0.0.1:3000 beechan
+```
+
+Then open **http://127.0.0.1:33000** on that Pixel. Invitation links made there
+work on the same device while the tunnel is open. Open a guest link in a private
+tab or a separate browser so its guest cookie does not replace the organizer
+cookie. These loopback links will not open on an iPad or iPhone; access for those
+devices still needs an explicitly reviewed network deployment.
 
 Check that it is running:
 
@@ -104,8 +117,11 @@ Data, photographs, databases, backups and local environment files must stay out
 of this public repository. `.dockerignore` allowlists application build inputs.
 Organizer data and hashed sessions live in `db/nami.sqlite`. Passphrases are
 hashed with scrypt; session cookies are HttpOnly and their raw values are not
-stored in the database. The same-disk `backups/` folder is not disaster recovery;
-backup/restore remains unimplemented and is required before real family use.
+stored in the database. Invitation secrets are also stored only as hashes. Each
+link grants one event role, remembers the first nickname used, and can be
+revoked by the organizer; anyone who receives the link can use that access until
+then. The same-disk `backups/` folder is not disaster recovery; backup/restore
+remains unimplemented and is required before real family use.
 
 ## Development and checks
 
@@ -124,8 +140,8 @@ npm run test:e2e
 Browser tests start a temporary server on `127.0.0.1:3100` with disposable data,
 then stop it and remove that data. They cover Chromium desktop and WebKit with
 iPad/iPhone device settings, including organizer setup, logout, repeat login,
-and creating and reopening an event. WebKit emulation is not a physical Safari
-test.
+creating and reopening an event, guest redemption, repeat access and revocation.
+WebKit emulation is not a physical Safari test.
 Some Linux hosts need Playwright's system libraries; use
 `sudo npx playwright install-deps chromium webkit` when the browser installer
 reports missing dependencies. Test results go to

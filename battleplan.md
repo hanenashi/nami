@@ -218,9 +218,9 @@ Backup design must coordinate the database snapshot with original files and GC.
 ### M1 — Private events and invitations
 - [x] Secure organizer bootstrap and local login/session.
 - [x] Create/list event, view event details.
-- [ ] Create, redeem and revoke viewer/contributor invitation; nickname and scoped guest session.
-- [ ] Robust role/access enforcement across two test events.
-- [ ] Usable responsive event UI.
+- [x] Create, redeem and revoke viewer/contributor invitation; nickname and scoped guest session.
+- [x] Robust role/access enforcement across two test events.
+- [x] Usable responsive event UI.
 
 **Exit:** guest can only access entitled event; viewer cannot upload; revocation works.
 

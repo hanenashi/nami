@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
-import { requireOrganizer, requireSameOrigin } from './auth.js';
+import { requireActor, requireOrganizer, requireSameOrigin } from './auth.js';
 import type { NamiDatabase } from './database.js';
 
 type EventBody = {
@@ -21,6 +21,8 @@ type EventRow = {
   created_at: number;
   updated_at: number;
 };
+
+type EventAccessRow = EventRow & { role: 'organizer' | 'contributor' | 'viewer'; display_name: string };
 
 const calendarDatePattern = '^\\d{4}-\\d{2}-\\d{2}$';
 const eventBodySchema = {
@@ -73,6 +75,7 @@ function serializeEvent(row: EventRow) {
 
 export function registerEvents(app: FastifyInstance, database: NamiDatabase, secureCookies: boolean) {
   const organizerOnly = requireOrganizer(database);
+  const signedIn = requireActor(database);
 
   app.get('/api/events', { preHandler: organizerOnly }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
@@ -87,17 +90,22 @@ export function registerEvents(app: FastifyInstance, database: NamiDatabase, sec
     return { events: rows.map(serializeEvent) };
   });
 
-  app.get<{ Params: { eventId: string } }>('/api/events/:eventId', { preHandler: organizerOnly }, async (request, reply) => {
+  app.get<{ Params: { eventId: string } }>('/api/events/:eventId', { preHandler: signedIn }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const row = database.prepare(`
       SELECT events.id, events.title, events.description, events.start_date,
-             events.end_date, events.timezone, events.created_at, events.updated_at
+             events.end_date, events.timezone, events.created_at, events.updated_at,
+             event_access.role, actors.display_name
       FROM events
       JOIN event_access ON event_access.event_id = events.id
-      WHERE events.id = ? AND event_access.actor_id = ? AND event_access.role = 'organizer'
-    `).get(request.params.eventId, request.namiActor!.id) as EventRow | undefined;
+      JOIN actors ON actors.id = event_access.actor_id
+      WHERE events.id = ? AND event_access.actor_id = ?
+    `).get(request.params.eventId, request.namiActor!.id) as EventAccessRow | undefined;
     if (!row) return reply.code(404).send({ error: 'Event not found.' });
-    return { event: serializeEvent(row) };
+    return {
+      event: serializeEvent(row),
+      access: { role: row.role, displayName: row.display_name },
+    };
   });
 
   app.post<{ Body: EventBody }>('/api/events', {

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { buildApp, dataDirectories } from '../src/app.js';
+import { openDatabase } from '../src/database.js';
 
 test('health, static assets and persistent storage stay separate across restarts', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'nami-api-'));
@@ -24,6 +25,9 @@ test('health, static assets and persistent storage stay separate across restarts
   assert.equal(health.headers['referrer-policy'], 'no-referrer');
   assert.equal(health.headers['x-content-type-options'], 'nosniff');
   assert.equal((await app.inject('/')).statusCode, 200);
+  const invitationShell = await app.inject('/invite/fixture-secret');
+  assert.equal(invitationShell.statusCode, 200);
+  assert.equal(invitationShell.headers['cache-control'], 'no-store');
   assert.deepEqual((await readdir(dataRoot)).sort(), [...dataDirectories].sort());
 
   // Synthetic text only: no photographs, credentials or personal data in fixtures.
@@ -205,4 +209,187 @@ test('organizer event access is enforced and events persist', async (t) => {
   const persisted = await app.inject({ url: `/api/events/${eventId}`, headers: { cookie: sessionCookie } });
   assert.equal(persisted.statusCode, 200);
   assert.equal(persisted.json().event.title, 'Autumn lunch');
+});
+
+test('legacy organizer data migrates to guest-capable actors without changing ownership', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'nami-migration-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const dataRoot = join(root, 'data');
+  await mkdir(join(dataRoot, 'db'), { recursive: true });
+  const path = join(dataRoot, 'db', 'nami.sqlite');
+  const legacy = new Database(path);
+  legacy.exec(`
+    PRAGMA foreign_keys = ON;
+    CREATE TABLE actors (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL CHECK (kind IN ('organizer')),
+      display_name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE UNIQUE INDEX one_organizer ON actors (kind) WHERE kind = 'organizer';
+    CREATE TABLE sessions (
+      token_hash TEXT PRIMARY KEY,
+      actor_id TEXT NOT NULL REFERENCES actors(id) ON DELETE CASCADE,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
+    CREATE TABLE events (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL REFERENCES actors(id) ON DELETE RESTRICT,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      start_date TEXT NOT NULL,
+      end_date TEXT,
+      timezone TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE event_access (
+      actor_id TEXT NOT NULL REFERENCES actors(id) ON DELETE CASCADE,
+      event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      role TEXT NOT NULL CHECK (role IN ('organizer', 'contributor', 'viewer')),
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (actor_id, event_id)
+    );
+    INSERT INTO actors VALUES ('organizer-1', 'organizer', 'Existing organizer', 'fixture-hash', 1);
+    INSERT INTO sessions VALUES ('fixture-token-hash', 'organizer-1', 1, 9999999999999);
+    INSERT INTO events VALUES ('event-1', 'organizer-1', 'Existing event', '', '2026-10-19', NULL, NULL, 1, 1);
+    INSERT INTO event_access VALUES ('organizer-1', 'event-1', 'organizer', 1);
+  `);
+  legacy.close();
+
+  const migrated = openDatabase(dataRoot);
+  assert.equal(migrated.pragma('foreign_keys', { simple: true }), 1);
+  assert.deepEqual(migrated.pragma('foreign_key_check'), []);
+  const migratedEvent = migrated.prepare('SELECT title FROM events WHERE owner_id = ?').get('organizer-1') as { title: string };
+  const migratedSessions = migrated.prepare('SELECT COUNT(*) AS count FROM sessions WHERE actor_id = ?').get('organizer-1') as { count: number };
+  assert.equal(migratedEvent.title, 'Existing event');
+  assert.equal(migratedSessions.count, 1);
+  migrated.prepare(`
+    INSERT INTO actors (id, kind, display_name, password_hash, created_at)
+    VALUES ('guest-1', 'guest', 'Guest', NULL, 2)
+  `).run();
+  const migratedGuests = migrated.prepare("SELECT COUNT(*) AS count FROM actors WHERE kind = 'guest'").get() as { count: number };
+  assert.equal(migratedGuests.count, 1);
+  assert.throws(() => migrated.prepare(`
+    INSERT INTO actors (id, kind, display_name, password_hash, created_at)
+    VALUES ('organizer-2', 'organizer', 'Another organizer', 'fixture-hash', 2)
+  `).run());
+  migrated.close();
+});
+
+test('invitation redemption is event-scoped, repeatable and revocable', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'nami-invitations-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const dataRoot = join(root, 'data');
+  const webRoot = join(root, 'web');
+  await mkdir(webRoot);
+  await writeFile(join(webRoot, 'index.html'), '<!doctype html><title>NAMI fixture</title>');
+  const app = await buildApp({ dataRoot, webRoot });
+  t.after(() => app.close());
+  const sameOriginHeaders = { host: 'nami.test', origin: 'http://nami.test' };
+  const setup = await app.inject({
+    method: 'POST', url: '/api/auth/setup', headers: sameOriginHeaders,
+    payload: { displayName: 'Organizer', password: 'a long test passphrase' },
+  });
+  const organizerCookie = String(setup.headers['set-cookie']).split(';', 1)[0];
+  const organizerHeaders = { ...sameOriginHeaders, cookie: organizerCookie };
+
+  async function createEvent(title: string, startDate: string) {
+    const response = await app.inject({
+      method: 'POST', url: '/api/events', headers: organizerHeaders,
+      payload: { title, startDate },
+    });
+    assert.equal(response.statusCode, 201);
+    return response.json().event.id as string;
+  }
+
+  const eventA = await createEvent('Event A', '2026-10-19');
+  const eventB = await createEvent('Event B', '2026-10-20');
+  const created = await app.inject({
+    method: 'POST', url: `/api/events/${eventA}/invitations`, headers: organizerHeaders,
+    payload: { role: 'viewer', expiresInDays: 30 },
+  });
+  assert.equal(created.statusCode, 201);
+  assert.equal(created.headers['cache-control'], 'no-store');
+  const invitationId = created.json().invitation.id as string;
+  const invitePath = created.json().invitePath as string;
+  const secret = invitePath.split('/').at(-1)!;
+  assert.match(secret, /^[A-Za-z0-9_-]{43}$/);
+
+  const database = new Database(join(dataRoot, 'db', 'nami.sqlite'));
+  const stored = database.prepare('SELECT secret_hash FROM invitations WHERE id = ?').get(invitationId) as { secret_hash: string };
+  assert.equal(stored.secret_hash.length, 64);
+  assert.notEqual(stored.secret_hash, secret);
+  database.close();
+  assert.equal((await readFile(join(dataRoot, 'db', 'nami.sqlite'))).includes(secret), false);
+
+  const preview = await app.inject(`/api/invitations/${secret}`);
+  assert.equal(preview.statusCode, 200);
+  assert.equal(preview.headers['cache-control'], 'no-store');
+  assert.equal(preview.json().invitation.event.title, 'Event A');
+  assert.equal(preview.json().invitation.redeemedAs, null);
+  const missingName = await app.inject({
+    method: 'POST', url: `/api/invitations/${secret}/redeem`, headers: sameOriginHeaders, payload: {},
+  });
+  assert.equal(missingName.statusCode, 400);
+
+  const redeemed = await app.inject({
+    method: 'POST', url: `/api/invitations/${secret}/redeem`, headers: sameOriginHeaders,
+    payload: { nickname: 'Aunt May' },
+  });
+  assert.equal(redeemed.statusCode, 200);
+  assert.equal(redeemed.json().access.role, 'viewer');
+  const guestCookie = String(redeemed.headers['set-cookie']).split(';', 1)[0];
+  assert.ok(guestCookie.startsWith('nami_session='));
+  assert.equal((await app.inject({ url: `/api/events/${eventA}`, headers: { cookie: guestCookie } })).json().access.role, 'viewer');
+  assert.equal((await app.inject({ url: `/api/events/${eventB}`, headers: { cookie: guestCookie } })).statusCode, 404);
+  assert.equal((await app.inject({ url: '/api/events', headers: { cookie: guestCookie } })).statusCode, 401);
+  assert.equal((await app.inject({
+    method: 'POST', url: '/api/events', headers: { ...sameOriginHeaders, cookie: guestCookie },
+    payload: { title: 'Guest event', startDate: '2026-10-21' },
+  })).statusCode, 401);
+  const guestAuthStatus = await app.inject({ url: '/api/auth/status', headers: { cookie: guestCookie } });
+  assert.equal(guestAuthStatus.json().authenticated, false);
+
+  const repeat = await app.inject({
+    method: 'POST', url: `/api/invitations/${secret}/redeem`, headers: sameOriginHeaders, payload: {},
+  });
+  assert.equal(repeat.statusCode, 200);
+  assert.equal(repeat.json().access.displayName, 'Aunt May');
+  const invitations = await app.inject({ url: `/api/events/${eventA}/invitations`, headers: { cookie: organizerCookie } });
+  assert.equal(invitations.json().invitations[0].status, 'redeemed');
+  assert.equal(invitations.json().invitations[0].redemptionCount, 2);
+
+  const revoked = await app.inject({
+    method: 'POST', url: `/api/events/${eventA}/invitations/${invitationId}/revoke`, headers: organizerHeaders,
+  });
+  assert.equal(revoked.statusCode, 204);
+  assert.equal((await app.inject({ url: `/api/events/${eventA}`, headers: { cookie: guestCookie } })).statusCode, 401);
+  assert.equal((await app.inject(`/api/invitations/${secret}`)).statusCode, 410);
+  assert.equal((await app.inject({
+    method: 'POST', url: `/api/invitations/${secret}/redeem`, headers: sameOriginHeaders, payload: {},
+  })).statusCode, 410);
+
+  const contributor = await app.inject({
+    method: 'POST', url: `/api/events/${eventA}/invitations`, headers: organizerHeaders,
+    payload: { role: 'contributor' },
+  });
+  const contributorSecret = (contributor.json().invitePath as string).split('/').at(-1)!;
+  const contributorRedeemed = await app.inject({
+    method: 'POST', url: `/api/invitations/${contributorSecret}/redeem`, headers: sameOriginHeaders,
+    payload: { nickname: 'Cousin Sam' },
+  });
+  assert.equal(contributorRedeemed.json().access.role, 'contributor');
+
+  const expiring = await app.inject({
+    method: 'POST', url: `/api/events/${eventA}/invitations`, headers: organizerHeaders,
+    payload: { role: 'viewer', expiresInDays: 7 },
+  });
+  const expiredSecret = (expiring.json().invitePath as string).split('/').at(-1)!;
+  const writableDatabase = new Database(join(dataRoot, 'db', 'nami.sqlite'));
+  writableDatabase.prepare('UPDATE invitations SET expires_at = ? WHERE id = ?').run(Date.now() - 1, expiring.json().invitation.id);
+  writableDatabase.close();
+  assert.equal((await app.inject(`/api/invitations/${expiredSecret}`)).statusCode, 410);
 });

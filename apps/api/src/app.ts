@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { registerAuth } from './auth.js';
 import { openDatabase } from './database.js';
 import { registerEvents } from './events.js';
+import { registerInvitations } from './invitations.js';
 
 export const dataDirectories = ['db', 'staging', 'originals', 'previews', 'backups'] as const;
 
@@ -36,9 +37,15 @@ export async function buildApp(options: { dataRoot: string; webRoot: string; log
   });
   await registerAuth(app, database, options.secureCookies ?? false);
   registerEvents(app, database, options.secureCookies ?? false);
+  registerInvitations(app, database, options.secureCookies ?? false);
   await app.register(fastifyStatic, { root: options.webRoot, dotfiles: 'deny' });
   app.get('/organizer', async (_request, reply) => reply.sendFile('index.html'));
   app.get('/organizer/events/:eventId', async (_request, reply) => reply.sendFile('index.html'));
+  app.get('/invite/:secret', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return reply.sendFile('index.html', { cacheControl: false });
+  });
+  app.get('/events/:eventId', async (_request, reply) => reply.sendFile('index.html'));
   // Unknown API/data paths must stay 404, rather than receiving the SPA shell.
   return app;
 }

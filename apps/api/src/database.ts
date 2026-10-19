@@ -4,6 +4,49 @@ import { join } from 'node:path';
 
 export type NamiDatabase = Database.Database;
 
+function migrateActorsForGuests(database: NamiDatabase) {
+  const table = database.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'actors'").get() as { sql: string } | undefined;
+  if (!table || table.sql.includes("'guest'")) return;
+
+  database.pragma('foreign_keys = OFF');
+  try {
+    database.exec(`
+      BEGIN IMMEDIATE;
+
+      CREATE TABLE actors_next (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL CHECK (kind IN ('organizer', 'guest', 'member')),
+        display_name TEXT NOT NULL,
+        password_hash TEXT,
+        created_at INTEGER NOT NULL,
+        CHECK (
+          (kind = 'organizer' AND password_hash IS NOT NULL)
+          OR (kind IN ('guest', 'member') AND password_hash IS NULL)
+        )
+      );
+
+      INSERT INTO actors_next (id, kind, display_name, password_hash, created_at)
+      SELECT id, kind, display_name, password_hash, created_at FROM actors;
+
+      DROP TABLE actors;
+      ALTER TABLE actors_next RENAME TO actors;
+
+      CREATE UNIQUE INDEX one_organizer
+        ON actors (kind) WHERE kind = 'organizer';
+
+      COMMIT;
+    `);
+  } catch (error) {
+    if (database.inTransaction) database.exec('ROLLBACK');
+    throw error;
+  } finally {
+    database.pragma('foreign_keys = ON');
+  }
+
+  const foreignKeyErrors = database.pragma('foreign_key_check') as unknown[];
+  if (foreignKeyErrors.length > 0) throw new Error('Database migration failed its foreign-key check.');
+}
+
 export function openDatabase(dataRoot: string): NamiDatabase {
   const path = join(dataRoot, 'db', 'nami.sqlite');
   const database = new Database(path);
@@ -14,11 +57,20 @@ export function openDatabase(dataRoot: string): NamiDatabase {
   database.exec(`
     CREATE TABLE IF NOT EXISTS actors (
       id TEXT PRIMARY KEY,
-      kind TEXT NOT NULL CHECK (kind IN ('organizer')),
+      kind TEXT NOT NULL CHECK (kind IN ('organizer', 'guest', 'member')),
       display_name TEXT NOT NULL,
-      password_hash TEXT NOT NULL,
-      created_at INTEGER NOT NULL
+      password_hash TEXT,
+      created_at INTEGER NOT NULL,
+      CHECK (
+        (kind = 'organizer' AND password_hash IS NOT NULL)
+        OR (kind IN ('guest', 'member') AND password_hash IS NULL)
+      )
     );
+  `);
+
+  migrateActorsForGuests(database);
+
+  database.exec(`
 
     CREATE UNIQUE INDEX IF NOT EXISTS one_organizer
       ON actors (kind) WHERE kind = 'organizer';
@@ -55,6 +107,22 @@ export function openDatabase(dataRoot: string): NamiDatabase {
     );
 
     CREATE INDEX IF NOT EXISTS event_access_by_event ON event_access (event_id, role);
+
+    CREATE TABLE IF NOT EXISTS invitations (
+      id TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      created_by TEXT NOT NULL REFERENCES actors(id) ON DELETE RESTRICT,
+      role TEXT NOT NULL CHECK (role IN ('contributor', 'viewer')),
+      secret_hash TEXT NOT NULL UNIQUE,
+      actor_id TEXT REFERENCES actors(id) ON DELETE RESTRICT,
+      expires_at INTEGER,
+      revoked_at INTEGER,
+      created_at INTEGER NOT NULL,
+      last_redeemed_at INTEGER,
+      redemption_count INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS invitations_by_event ON invitations (event_id, created_at);
   `);
   return database;
 }

@@ -1,7 +1,7 @@
 # NAMI status
 
-2026-10-19 — M0 complete. M1 organizer access and private events complete;
-invitations next.
+2026-10-19 — M0 and M1 complete. Private events, scoped invitations and
+revocation work locally; the first complete photo path is next.
 
 ## Working locally
 
@@ -17,11 +17,15 @@ invitations next.
   same-origin checks and basic login/setup throttling.
 - Organizer-only event creation, event list and event details with a small
   responsive form, persisted ownership and explicit event access records.
+- Organizer-created viewer/contributor links with optional expiry, guest
+  nickname redemption, repeat access and immediate organizer revocation.
+- Event-scoped guest details with clear contributor/viewer status and a
+  responsive invitation flow.
 
 ## Verified
 
-- `npm run check`: lint, typecheck, production builds and 4 API tests passed.
-- `npm run test:e2e` against the local production build: 9 tests passed across
+- `npm run check`: lint, typecheck, production builds and 6 API tests passed.
+- `npm run test:e2e` against the local production build: 12 tests passed across
   Chromium desktop and WebKit iPad/iPhone profiles.
 - Health response, page title/content, keyboard and touch disclosure open/close,
   no application console errors or horizontal overflow.
@@ -66,6 +70,25 @@ invitations next.
 - Beechan's live container was rebuilt on the persistent data mount after a
   mode-`0600` SQLite snapshot. The organizer record was unchanged, the new empty
   event tables were added, and the service remains healthy and loopback-only.
+- The actor-schema migration preserved a legacy organizer, session, event and
+  ownership record, accepted a guest afterward, and passed SQLite's foreign-key
+  check.
+- Invitation API checks proved raw secrets are absent from SQLite, viewer and
+  contributor roles redeem correctly, a guest cannot list or create events or
+  access a second event, repeat redemption keeps the nickname, and expiry and
+  revocation respectively deny later redemption and access.
+- The complete invitation flow passed desktop Chromium and WebKit iPad/iPhone
+  profiles. Two fresh guest browser contexts redeemed the same link, and
+  revocation ended both sessions. The responsive screens were also inspected at
+  1440×1000, 810×1080 and 390×664 CSS pixels.
+- A clean Docker image passed all 12 browser tests. Its actors, events, access
+  rows and invitations survived forced container recreation with no foreign-key
+  errors; the database remained mode `0600`, and the healthy read-only container
+  remained UID/GID 1000:1000 and loopback-only.
+- Beechan's live database was backed up consistently before migration. The
+  organizer, active session, test event and ownership row matched the snapshot
+  afterward, while the guest-capable actor schema and empty invitation table
+  were added. The upgraded service is healthy and the test event remains.
 
 ## Fixes during verification
 
@@ -76,14 +99,20 @@ invitations next.
   page loading and interactions have no such console error. CSP stayed strict.
 - Added compiler tools to the disposable Docker build stage because the Node 22
   image had no matching prebuilt `better-sqlite3` binary. The runtime stays slim.
+- Replaced native invitation `<select>` controls with large radio choices after
+  WebKit exposed a browser-generated inline-style CSP violation. CSP remains
+  strict and all three browser profiles pass.
 
 ## Not verified / not built
 
-No invitations, media ingestion, HEIC processing, gallery, automated backups,
-public deployment or real family photos yet. No physical iPad/iPhone event-flow
-test yet.
+No media ingestion, HEIC processing, gallery, automated backup/restore, public
+deployment or real family photos yet. No physical iPad/iPhone event-flow test
+yet. Current SSH-loopback invitation links work only on the tunneled Pixel, not
+on relatives' devices.
 
 ## Next task
 
-Add **viewer/contributor invitations** with hashed secrets, optional expiry,
-redemption into an event-scoped guest session, and organizer revocation.
+Build one complete **JPEG vertical slice**: an authenticated contributor uploads
+one JPEG to persistent staging, NAMI verifies and preserves its exact bytes,
+creates a safe preview, shows it in the event, and serves the authorized
+original download. Reject viewer and cross-event attempts in the same slice.

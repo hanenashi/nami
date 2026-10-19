@@ -12,10 +12,10 @@ const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const SCRYPT_KEY_LENGTH = 64;
 const SETUP_ATTEMPTS_PER_MINUTE = 5;
-const LOGIN_ATTEMPTS_PER_MINUTE = 10;
+const LOGIN_ATTEMPTS_PER_MINUTE = 15;
 
 type Organizer = { id: string; display_name: string; password_hash: string };
-export type SessionActor = { id: string; kind: 'organizer'; display_name: string };
+export type SessionActor = { id: string; kind: 'organizer' | 'guest' | 'member'; display_name: string };
 type SetupBody = { displayName: string; password: string };
 type LoginBody = { password: string };
 
@@ -85,7 +85,7 @@ export function findSessionActor(database: NamiDatabase, token: string | undefin
   `).get(hashToken(token), now) as SessionActor | undefined;
 }
 
-function setSession(database: NamiDatabase, reply: FastifyReply, actorId: string, secureCookies: boolean) {
+export function issueSession(database: NamiDatabase, reply: FastifyReply, actorId: string, secureCookies: boolean) {
   const token = randomBytes(32).toString('base64url');
   const now = Date.now();
   database.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now);
@@ -122,6 +122,17 @@ export function requireOrganizer(database: NamiDatabase) {
   };
 }
 
+export function requireActor(database: NamiDatabase) {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const actor = findSessionActor(database, request.cookies[COOKIE_NAME]);
+    if (!actor) {
+      reply.header('Cache-Control', 'no-store');
+      return reply.code(401).send({ error: 'This session is no longer active.' });
+    }
+    request.namiActor = actor;
+  };
+}
+
 declare module 'fastify' {
   interface FastifyRequest {
     namiActor?: SessionActor;
@@ -137,10 +148,11 @@ export async function registerAuth(app: FastifyInstance, database: NamiDatabase,
     reply.header('Cache-Control', 'no-store');
     const organizer = findOrganizer(database);
     const actor = findSessionActor(database, request.cookies[COOKIE_NAME]);
+    const signedInOrganizer = actor?.kind === 'organizer' ? actor : undefined;
     return {
       setupRequired: !organizer,
-      authenticated: Boolean(actor),
-      organizer: actor ? { displayName: actor.display_name } : null,
+      authenticated: Boolean(signedInOrganizer),
+      organizer: signedInOrganizer ? { displayName: signedInOrganizer.display_name } : null,
     };
   });
 
@@ -163,7 +175,7 @@ export async function registerAuth(app: FastifyInstance, database: NamiDatabase,
       if (findOrganizer(database)) return reply.code(409).send({ error: 'NAMI has already been set up.' });
       throw error;
     }
-    setSession(database, reply, actorId, secureCookies);
+    issueSession(database, reply, actorId, secureCookies);
     return reply.code(201).send({ authenticated: true, organizer: { displayName } });
   });
 
@@ -177,7 +189,7 @@ export async function registerAuth(app: FastifyInstance, database: NamiDatabase,
     if (!await verifyPassword(request.body.password, organizer.password_hash)) {
       return reply.code(401).send({ error: 'That passphrase didn’t work.' });
     }
-    setSession(database, reply, organizer.id, secureCookies);
+    issueSession(database, reply, organizer.id, secureCookies);
     return { authenticated: true, organizer: { displayName: organizer.display_name } };
   });
 
