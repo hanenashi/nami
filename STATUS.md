@@ -29,7 +29,7 @@ and the first complete JPEG path now runs locally. Resumable batches come next.
 
 ## Verified
 
-- `npm run check`: lint, typecheck, production builds and 7 API tests passed.
+- `npm run check`: lint, typecheck, production builds and 8 API tests passed.
 - `npm run test:e2e` against the local production build: 12 tests passed across
   Chromium desktop and WebKit iPad/iPhone profiles.
 - Health response, page title/content, keyboard and touch disclosure open/close,
@@ -136,8 +136,8 @@ and the first complete JPEG path now runs locally. Resumable batches come next.
 
 ## Not verified / not built
 
-No resumable or multi-file upload, HEIC/video processing, gallery lightbox,
-automated backup/restore or public deployment yet. Crash
+No browser resumable or multi-file upload, HEIC/video processing, gallery lightbox,
+scheduled backup/restore tooling or public deployment yet. Crash
 reconciliation for orphaned staging/files is still pending. No physical
 iPad/iPhone event-flow test yet. Current SSH-loopback invitation links work only
 on the tunneled Pixel, not on relatives' devices.
@@ -162,7 +162,35 @@ cloud dependencies or broad abstractions.
 
 ## Next task
 
-Begin M2 with persistent resumable upload sessions and owner/event authorization
-on create, HEAD, PATCH and cancellation. Verify interrupted transfer and API
-restart before adding a bulk queue. Probe HEIC support in the actual image early;
+Continue M2 with durable JPEG finalization, original-name/type metadata and
+abandoned-session cleanup before connecting a browser bulk queue. The initial
+Tus transport is implemented and tested, but does not publish photos. Probe HEIC support in the actual image early;
 JPEG remains the only accepted type until a decoder is verified.
+
+## M2 transport increment
+
+- Added SQLite-backed Tus session ownership and persistent private `uploads/`
+  files, capped at ten sessions per actor and 25 MiB per file.
+- Create, HEAD, PATCH and DELETE check uploader identity and current event
+  contribution permission; no public staging GET route exists.
+- Real HTTP tests drop a PATCH connection mid-body, verify the persisted offset,
+  restart the API and resume with byte-exact results. They also test wrong
+  offsets, cross-event/other-guest/viewer denial, revocation, cancellation,
+  oversize creation and session allocation limits.
+- This increment stages untrusted bytes only. No gallery publication, expiry,
+  background work, browser queue or Ready status is claimed. Completed staging
+  still occupies a slot until cancelled; orphan reconciliation remains pending.
+
+## Latest deployment and recovery check
+
+- Full offline pre-Tus backup: `../nami-backups/pre-tus-20261019`, with a sibling
+  SHA-256 manifest. Contains SQLite plus both originals and both previews;
+  excludes older nested backups. Directory mode 0700, files 0600.
+- Restored a disposable copy, started the current application against it and
+  checked the additive upload-session migration. SQLite integrity and foreign
+  keys passed. Restored and live rows match the backup: 2 actors, 3 sessions,
+  1 event, 2 access records, 1 invitation, 2 media records. All original and
+  preview hashes match. The disposable restore was removed afterward.
+- Rebuilt the Docker image and deployed on the existing data mount. Container
+  is healthy and remains loopback-only. This is a same-host recovery check;
+  off-host disaster recovery and scheduled backups are still outstanding.

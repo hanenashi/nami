@@ -116,6 +116,7 @@ Configurable data root (outside Git and ignored entirely):
 data/
   db/
   staging/
+  uploads/       # persistent, untrusted Tus transport files
   originals/
   previews/
   backups/     # optional local convenience, not an independent backup
@@ -251,7 +252,8 @@ Backup design must coordinate the database snapshot with original files and GC.
 
 ### M2 — Resumable bulk upload
 - [ ] Uppy queue and clear per-file/total progress.
-- [ ] Tus uploads to persistent staging, owner/event permission checks on all operations.
+- [x] Initial Tus transport to persistent staging, owner/event permission checks on create/HEAD/PATCH/DELETE; dropped connection and API restart tested.
+- [ ] Durable finalization into the verified JPEG/gallery path; transport completion alone is not Ready.
 - [ ] Pause/retry/resume, cancellation, browser reselect recovery where feasible.
 - [ ] File size/type/quota/staging cleanup enforcement and ledger.
 - [ ] Test interrupted network, API restart and repeated batches.

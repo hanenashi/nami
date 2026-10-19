@@ -1,0 +1,124 @@
+import { Server, Upload } from '@tus/server';
+import { FileStore, type Configstore } from '@tus/file-store';
+import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
+import { mkdir, open, unlink } from 'node:fs/promises';
+import { join } from 'node:path';
+import { COOKIE_NAME, findSessionActor, requireActor, requireSameOrigin } from './auth.js';
+import type { NamiDatabase } from './database.js';
+
+const MAX_BYTES = 25 * 1024 * 1024;
+const MAX_SESSIONS = 10;
+const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const route = new RegExp(`^/api/events/(${uuid})/uploads(?:/(${uuid}))?$`);
+const problem = (status_code: number, body: string) => ({ status_code, body });
+type Session = { actor_id: string; event_id: string; metadata: string };
+
+// This first transport increment only stages bytes. JPEG validation and gallery
+// publication still use /media until durable finalization is implemented.
+export async function registerUploads(app: FastifyInstance, db: NamiDatabase, dataRoot: string, secure: boolean) {
+  const directory = join(dataRoot, 'uploads');
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const get = (id: string) => db.prepare('SELECT actor_id, event_id, metadata FROM upload_sessions WHERE id = ?').get(id) as Session | undefined;
+  const configstore: Configstore = {
+    async get(id) {
+      const row = get(id);
+      return row ? new Upload(JSON.parse(row.metadata)) : undefined;
+    },
+    async set(id, value) {
+      db.transaction(() => {
+        const actor = value.metadata?.actor;
+        const count = db.prepare('SELECT count(*) AS count FROM upload_sessions WHERE actor_id = ?').get(actor) as { count: number };
+        if (count.count >= MAX_SESSIONS) throw problem(429, 'Cancel an existing upload before starting another.');
+        db.prepare('INSERT INTO upload_sessions (id, actor_id, event_id, metadata) VALUES (?, ?, ?, ?)')
+          .run(id, actor, value.metadata?.event, JSON.stringify(value));
+      })();
+    },
+    async delete(id) { db.prepare('DELETE FROM upload_sessions WHERE id = ?').run(id); },
+  };
+  class PrivateStore extends FileStore {
+    override async create(upload: Upload) {
+      const path = join(directory, upload.id);
+      const file = await open(path, 'wx', 0o600);
+      await file.close();
+      try {
+        await configstore.set(upload.id, upload);
+        upload.storage = { type: 'file', path };
+        return upload;
+      } catch (error) {
+        await unlink(path);
+        throw error;
+      }
+    }
+  }
+  const store = new PrivateStore({ directory, configstore });
+  // Fixed-length, empty creation only. No deferred allocation, concatenation,
+  // public GET or expiry promise until lifecycle reconciliation is implemented.
+  store.extensions = ['creation', 'termination'];
+  function authorize(request: Request, uploadId?: string) {
+    const match = route.exec(new URL(request.url).pathname);
+    if (!match) throw problem(404, 'Upload not found.');
+    const actor = findSessionActor(db, app.parseCookie(request.headers.get('cookie') ?? '')[COOKIE_NAME]);
+    if (!actor) throw problem(401, 'This session is no longer active.');
+    const access = db.prepare('SELECT role FROM event_access WHERE actor_id = ? AND event_id = ?')
+      .get(actor.id, match[1]) as { role: string } | undefined;
+    if (!access) throw problem(404, 'Upload not found.');
+    if (access.role === 'viewer') throw problem(403, 'This invitation cannot upload photos.');
+    if (request.method !== 'POST' && uploadId) {
+      const session = get(uploadId);
+      if (!session || session.actor_id !== actor.id || session.event_id !== match[1]) throw problem(404, 'Upload not found.');
+    }
+    return { actor: actor.id, event: match[1] };
+  }
+  const server = new Server({
+    path: '/api/uploads', datastore: store, maxSize: MAX_BYTES, allowedOrigins: [],
+    namingFunction: () => randomUUID(),
+    getFileIdFromRequest: (request) => route.exec(new URL(request.url).pathname)?.[2],
+    generateUrl: (request, { id }) => `/api/events/${authorize(request).event}/uploads/${id}`,
+    onIncomingRequest: async (request, id) => { authorize(request, id); },
+    onUploadCreate: async (request, upload) => {
+      if (!upload.size || request.headers.has('upload-defer-length') || request.headers.has('content-type') || Number(request.headers.get('content-length') ?? 0) !== 0) {
+        throw problem(400, 'Create an empty upload with a fixed positive Upload-Length.');
+      }
+      return { metadata: authorize(request) };
+    },
+    onUploadFinish: async (request, upload) => { authorize(request, upload.id); return {}; },
+  });
+  await app.register(async (scope) => {
+    scope.addContentTypeParser('application/offset+octet-stream', (_request, _payload, done) => done(null));
+    scope.route({
+      method: ['POST', 'OPTIONS'], url: '/api/events/:eventId/uploads',
+      onRequest: [requireSameOrigin(secure), requireActor(db)],
+      handler: async (request, reply) => {
+        if (request.method === 'OPTIONS') {
+          // OPTIONS does not run Tus's incoming-request hook.
+          const headers = new Headers({ cookie: request.headers.cookie ?? '' });
+          try { authorize(new Request(`http://localhost${request.url}`, { headers, method: 'OPTIONS' })); }
+          catch (error) { const failure = error as ReturnType<typeof problem>; return reply.code(failure.status_code).send({ error: failure.body }); }
+        }
+        reply.hijack();
+        reply.raw.setHeader('Cache-Control', 'no-store');
+        reply.raw.setHeader('X-Content-Type-Options', 'nosniff');
+        reply.raw.setHeader('Referrer-Policy', 'no-referrer');
+        reply.raw.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+        await server.handle(request.raw, reply.raw);
+      },
+    });
+    scope.route({
+      method: ['HEAD', 'PATCH', 'DELETE'], url: '/api/events/:eventId/uploads/:uploadId',
+      onRequest: [async (request, reply) => {
+        // Same-origin browser HEAD requests may omit Origin. It is read-only;
+        // cookie authentication and upload ownership are still mandatory.
+        if (request.method !== 'HEAD' || request.headers.origin) await requireSameOrigin(secure)(request, reply);
+      }, requireActor(db)],
+      handler: async (request, reply) => {
+        reply.hijack();
+        reply.raw.setHeader('Cache-Control', 'no-store');
+        reply.raw.setHeader('X-Content-Type-Options', 'nosniff');
+        reply.raw.setHeader('Referrer-Policy', 'no-referrer');
+        reply.raw.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+        await server.handle(request.raw, reply.raw);
+      },
+    });
+  });
+}

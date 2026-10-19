@@ -102,7 +102,7 @@ The first build needs internet access to download the Node image and packages.
 ## Data and configuration
 
 Compose defaults to `../nami-data` outside the checkout. It contains `db/`,
-`staging/`, `originals/`, `previews/`, and `backups/`. Uploaded bytes pass through
+`staging/`, `uploads/`, `originals/`, `previews/`, and `backups/`. Uploaded bytes pass through
 private staging; accepted originals and generated previews remain outside the
 web root. The mount must already exist so Docker cannot silently create a
 root-owned data folder. The container runs as an unprivileged user.
@@ -199,3 +199,19 @@ cloud dependencies or broad abstractions.
 - `compose.yaml` / `Dockerfile`: one local service with persistent external data.
 - `battleplan.md`: product intent and milestones.
 - `STATUS.md`: verified progress, limits and the next concrete task.
+
+## Resumable upload groundwork
+
+The API now supports private Tus sessions at `/api/events/:eventId/uploads`:
+empty POST with a fixed `Upload-Length`, then HEAD/PATCH/DELETE at the returned
+relative Location. Requests require the current uploader's cookie and Tus 1.0.0
+headers. Mutations require a same-origin Origin header; read-only HEAD also
+accepts its absence, as browsers may omit it. Staged files survive API restarts, are
+limited to 25 MiB each and ten sessions per actor (250 MiB maximum), and cannot
+be downloaded through this endpoint. DELETE frees a session's allocation.
+
+This is transport groundwork, not a second photo uploader: received bytes are
+not yet validated as JPEG or published into the gallery. The browser continues
+using the tested single-JPEG path. Durable finalization, abandoned-session
+cleanup, filename/type metadata and the bulk queue remain next. Until cleanup
+exists, staged sessions remain on disk until explicitly cancelled.

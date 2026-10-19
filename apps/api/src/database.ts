@@ -140,6 +140,14 @@ export function openDatabase(dataRoot: string): NamiDatabase {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS upload_sessions (
+      id TEXT PRIMARY KEY,
+      actor_id TEXT NOT NULL REFERENCES actors(id) ON DELETE RESTRICT,
+      event_id TEXT NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
+      metadata TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS uploads_by_actor ON upload_sessions (actor_id);
+
     CREATE INDEX IF NOT EXISTS media_by_event ON media (event_id, created_at);
   `);
   return database;
