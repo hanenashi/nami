@@ -9,7 +9,7 @@ import { registerEvents } from './events.js';
 import { registerInvitations } from './invitations.js';
 import { registerUploads } from './uploads.js';
 import { registerMedia } from './media.js';
-import { registerSuperadmin } from './superadmin.js';
+import { registerSuperadmin, type MaintenanceGate } from './superadmin.js';
 
 export const dataDirectories = ['db', 'staging', 'uploads', 'originals', 'previews', 'backups'] as const;
 
@@ -28,7 +28,23 @@ export async function buildApp(options: { dataRoot: string; webRoot: string; log
     bodyLimit: 32 * 1024,
   });
   const database = openDatabase(options.dataRoot);
+  const maintenance: MaintenanceGate = { activeRequests: 0, resetInProgress: false };
   app.addHook('onClose', async () => database.close());
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.url === '/api/health') return;
+    if (maintenance.resetInProgress) {
+      return reply.code(503).send({ error: 'NAMI is preparing a private reset. Try again shortly.' });
+    }
+    maintenance.activeRequests += 1;
+    let done = false;
+    const release = () => {
+      if (done) return;
+      done = true;
+      maintenance.activeRequests -= 1;
+    };
+    reply.raw.once('finish', release);
+    reply.raw.once('close', release);
+  });
   app.addHook('onSend', async (_request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Referrer-Policy', 'no-referrer');
@@ -39,7 +55,7 @@ export async function buildApp(options: { dataRoot: string; webRoot: string; log
     return { status: 'ok', service: 'nami' };
   });
   await registerAuth(app, database, options.secureCookies ?? false);
-  registerSuperadmin(app, database, options.dataRoot, options.secureCookies ?? false);
+  registerSuperadmin(app, database, options.dataRoot, options.secureCookies ?? false, maintenance);
   registerEvents(app, database, options.dataRoot, options.secureCookies ?? false);
   registerInvitations(app, database, options.secureCookies ?? false);
   await registerMedia(app, database, options.dataRoot, options.secureCookies ?? false);

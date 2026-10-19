@@ -245,6 +245,10 @@ Backup design must coordinate the database snapshot with original files and GC.
 - [x] Manual permanent cleanup for inactive, empty guest accounts only, with
   name confirmation and a verified SQLite backup. Preserve photo attribution;
   never delete organizer accounts or purge people automatically.
+- [x] Superadmin organizer replacement keeps album data while changing name and
+  passphrase with a verified SQLite backup and session invalidation. A separate
+  full-instance reset requires the superadmin passphrase, typed phrase and final
+  confirmation, verifies a database/media backup and leaves superadmin intact.
 - [x] Organizer-initiated guest link replacement after loss, expiry or revocation:
   retire old links/sessions, preserve the guest actor and photo attribution,
   require an explicit confirmation, and warn that the new bearer link signs in

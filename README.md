@@ -107,6 +107,21 @@ removing the guest and their invitation history. Organizers and guests who have
 contributed photos cannot be deleted this way. Deletion is manual; NAMI never
 automatically purges accounts.
 
+For a temporary organizer such as `test`, **Replace organizer, keep the album**
+sets a new name and passphrase on the same organizer identity. Events, photos,
+guests and invitations remain; old organizer sessions end. Because the identity
+is reused, existing photos show the new organizer name. A verified SQLite
+backup is made before the change.
+
+**Erase NAMI and start over** removes the organizer, guests, events,
+invitations, photos and uploads so a fresh organizer can be created. It keeps
+the separate superadmin credential. This requires re-entering the superadmin
+passphrase, typing `ERASE ALL NAMI DATA`, and accepting a final confirmation.
+The service pauses other requests, refuses to proceed with unfinished uploads,
+then verifies a private backup of SQLite and all active media files before
+erasing anything. The backup is stored under `../nami-data/backups/` on the
+host, not off-site. Use this only when all album content can go.
+
 The superadmin login is independent of the organizer login, with its own
 hashed passphrase and session cookie. The page remains on NAMI's loopback-only
 service; knowing its URL does not grant access. There is no remote access to it

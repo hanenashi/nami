@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   disableGuest, getSuperadminPeople, getSuperadminStatus, loginSuperadmin, permanentlyDeleteGuest,
-  logoutSuperadmin, resetOrganizerFromSuperadmin, signOutPerson,
+  logoutSuperadmin, replaceOrganizer, resetNamiInstance, resetOrganizerFromSuperadmin, signOutPerson,
   type SuperadminPerson,
 } from './api.js';
 
@@ -78,6 +78,55 @@ export function Superadmin() {
     } finally { setWorking(false); }
   }
 
+  async function replace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const displayName = String(data.get('displayName') ?? '').trim();
+    const password = String(data.get('password') ?? '');
+    if (password !== String(data.get('confirmation') ?? '')) {
+      setError('Those passphrases don’t match.');
+      return;
+    }
+    if (!window.confirm(`Replace the organizer with ${displayName}? Existing events and photos stay, but old organizer sessions will end and existing photo attribution will show the new name.`)) return;
+    setWorking(true);
+    setError('');
+    setNotice('');
+    try {
+      await replaceOrganizer(displayName, password);
+      form.reset();
+      await refresh();
+      setNotice(`Organizer changed to ${displayName}. A private SQLite backup was created, and old organizer sessions were signed out.`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Couldn’t replace the organizer.');
+    } finally { setWorking(false); }
+  }
+
+  async function resetInstance(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const phrase = String(data.get('confirmation') ?? '');
+    if (phrase !== 'ERASE ALL NAMI DATA') {
+      setError('The reset phrase did not match. Nothing was erased.');
+      return;
+    }
+    if (!window.confirm('Final check: erase the organizer, all guests, events, invitations, photos, and uploads? A full private backup will be verified first. This cannot be undone from the web page.')) return;
+    setWorking(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await resetNamiInstance(String(data.get('password') ?? ''), phrase);
+      form.reset();
+      await refresh();
+      setNotice(result.cleanupPending
+        ? 'NAMI was reset and backed up, but some old media files need host cleanup.'
+        : 'NAMI was reset. The verified full backup is in NAMI’s private backups folder. You can now create a new organizer.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Couldn’t reset NAMI.');
+    } finally { setWorking(false); }
+  }
+
   async function personAction(person: SuperadminPerson, action: 'signout' | 'disable') {
     const message = action === 'disable'
       ? `Disable ${person.displayName}’s guest access? Their invitation links and sessions will stop working. Their photos stay in the album.`
@@ -139,13 +188,15 @@ export function Superadmin() {
     </section>
   );
 
+  const organizer = people?.find(person => person.kind === 'organizer');
+
   return (
     <section className="superadmin-page">
       <div className="superadmin-heading">
         <div><p className="section-label">Owner controls</p><h1>People in NAMI.</h1></div>
         <button className="text-button" type="button" onClick={logout} disabled={working}>Sign out</button>
       </div>
-      <p className="superadmin-intro">See the organizer and everyone who has joined through an invitation. Disabling guest access keeps their photos and names in the album. Empty, inactive guest accounts can be permanently deleted.</p>
+      <p className="superadmin-intro">Manage NAMI accounts and access. Guest deletion is available only for empty, inactive accounts.</p>
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       {notice ? <p className="superadmin-notice" role="status">{notice}</p> : null}
       {!people ? <p>Loading people…</p> : (
@@ -164,7 +215,18 @@ export function Superadmin() {
           ))}
         </div>
       )}
-      <details className="superadmin-reset">
+      {people && !organizer ? <p className="superadmin-notice">NAMI has no organizer. <a href="/organizer">Create one now</a>.</p> : null}
+      {organizer ? <details className="superadmin-reset">
+        <summary>Replace organizer, keep the album</summary>
+        <form onSubmit={replace}>
+          <p>Change the organizer’s name and passphrase while keeping events, guests, and photos. Existing photos will show the new organizer name. Old organizer sessions will end. A SQLite backup is made first.</p>
+          <label className="field"><span>New organizer name</span><input name="displayName" type="text" autoComplete="name" maxLength={80} required /></label>
+          <label className="field"><span>Replacement passphrase</span><input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={256} required /></label>
+          <label className="field"><span>Repeat replacement passphrase</span><input name="confirmation" type="password" autoComplete="new-password" minLength={12} maxLength={256} required /></label>
+          <button className="primary-button" type="submit" disabled={working}>Replace organizer</button>
+        </form>
+      </details> : null}
+      {organizer ? <details className="superadmin-reset">
         <summary>Reset organizer passphrase</summary>
         <form onSubmit={reset}>
           <p>Use this when the organizer can no longer sign in. NAMI makes a private SQLite backup before changing the passphrase.</p>
@@ -172,7 +234,16 @@ export function Superadmin() {
           <label className="field"><span>Repeat new passphrase</span><input name="confirmation" type="password" autoComplete="new-password" minLength={12} maxLength={256} required /></label>
           <button className="primary-button" type="submit" disabled={working}>Reset passphrase</button>
         </form>
-      </details>
+      </details> : null}
+      {organizer ? <details className="superadmin-reset superadmin-danger">
+        <summary>Erase NAMI and start over</summary>
+        <form onSubmit={resetInstance}>
+          <p>This removes every organizer and guest account, event, invitation, photo, and upload. A verified backup of the database and photo files is saved locally first. Your separate superadmin login stays.</p>
+          <label className="field"><span>Superadmin passphrase</span><input name="password" type="password" autoComplete="current-password" minLength={12} maxLength={256} required /></label>
+          <label className="field"><span>Type ERASE ALL NAMI DATA</span><input name="confirmation" type="text" autoComplete="off" required /></label>
+          <button className="secondary-button" type="submit" disabled={working}>Erase NAMI data</button>
+        </form>
+      </details> : null}
     </section>
   );
 }

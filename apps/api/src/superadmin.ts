@@ -1,14 +1,20 @@
 import Database from 'better-sqlite3';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHash, randomBytes } from 'node:crypto';
-import { chmod, mkdir, stat, unlink } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { chmod, copyFile, mkdir, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { hashOrganizerPassword, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, requireSameOrigin, verifyPassword } from './auth.js';
 import { resetOrganizerPassphrase } from './admin-reset.js';
 import type { NamiDatabase } from './database.js';
 
 const COOKIE_NAME = 'nami_superadmin';
 const SESSION_SECONDS = 60 * 60 * 24 * 7;
+const RESET_PHRASE = 'ERASE ALL NAMI DATA';
+const mediaDirectories = ['originals', 'previews', 'staging', 'uploads'] as const;
+const contentTables = ['actors', 'sessions', 'events', 'event_access', 'invitations', 'media', 'upload_sessions'] as const;
+export type MaintenanceGate = { activeRequests: number; resetInProgress: boolean };
 const passwordBody = {
   type: 'object', additionalProperties: false, required: ['password'],
   properties: { password: { type: 'string', minLength: PASSWORD_MIN_LENGTH, maxLength: PASSWORD_MAX_LENGTH } },
@@ -58,6 +64,67 @@ async function verifiedBackup(database: NamiDatabase, dataRoot: string, prefix: 
     throw error;
   }
   return backupPath;
+}
+
+async function fileHash(path: string) {
+  const hash = createHash('sha256');
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest('hex');
+}
+
+function contentCounts(database: NamiDatabase) {
+  return Object.fromEntries(contentTables.map(table => [table,
+    (database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n]));
+}
+
+async function verifiedFullBackup(database: NamiDatabase, dataRoot: string) {
+  const backupRoot = join(dataRoot, 'backups');
+  await mkdir(backupRoot, { recursive: true, mode: 0o700 });
+  await chmod(backupRoot, 0o700);
+  const destination = join(backupRoot, `before-instance-reset-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomBytes(8).toString('hex')}`);
+  await mkdir(destination, { mode: 0o700 });
+  try {
+    const dbPath = join(destination, 'nami.sqlite');
+    await database.backup(dbPath);
+    await chmod(dbPath, 0o600);
+    const saved = new Database(dbPath, { readonly: true });
+    try {
+      if (saved.pragma('integrity_check', { simple: true }) !== 'ok' ||
+        (saved.pragma('foreign_key_check') as unknown[]).length ||
+        JSON.stringify(contentCounts(saved)) !== JSON.stringify(contentCounts(database))) {
+        throw new Error('Full backup database verification failed. Nothing was erased.');
+      }
+      const copied: Record<string, string> = {};
+      for (const directory of mediaDirectories) {
+        const source = join(dataRoot, directory);
+        const target = join(destination, directory);
+        await mkdir(target, { mode: 0o700 });
+        for (const entry of await readdir(source, { withFileTypes: true })) {
+          if (!entry.isFile()) throw new Error('Storage contains an unexpected entry. Nothing was erased.');
+          const from = join(source, entry.name);
+          const to = join(target, entry.name);
+          await copyFile(from, to);
+          await chmod(to, 0o600);
+          const originalHash = await fileHash(from);
+          if (originalHash !== await fileHash(to)) throw new Error('Full backup file verification failed. Nothing was erased.');
+          copied[`${directory}/${entry.name}`] = originalHash;
+        }
+      }
+      const photos = saved.prepare('SELECT id, sha256 FROM media').all() as { id: string; sha256: string }[];
+      for (const photo of photos) {
+        if (copied[`originals/${photo.id}.jpg`] !== photo.sha256 || !copied[`previews/${photo.id}.jpg`]) {
+          throw new Error('A stored photo is missing or does not match its database hash. Nothing was erased.');
+        }
+      }
+      const manifest = join(destination, 'SHA256.json');
+      await writeFile(manifest, JSON.stringify(copied, null, 2), { mode: 0o600, flag: 'wx' });
+      await chmod(manifest, 0o600);
+    } finally { saved.close(); }
+  } catch (error) {
+    await rm(destination, { recursive: true, force: true });
+    throw error;
+  }
+  return destination;
 }
 
 function hasSession(database: NamiDatabase, token: string | undefined) {
@@ -112,7 +179,7 @@ export async function setSuperadminPassphrase(dataRoot: string, passphrase: stri
   } finally { database.close(); }
 }
 
-export function registerSuperadmin(app: FastifyInstance, database: NamiDatabase, dataRoot: string, secureCookies: boolean) {
+export function registerSuperadmin(app: FastifyInstance, database: NamiDatabase, dataRoot: string, secureCookies: boolean, maintenance: MaintenanceGate) {
   const sameOrigin = requireSameOrigin(secureCookies);
   const adminOnly = requireSuperadmin(database);
 
@@ -236,5 +303,89 @@ export function registerSuperadmin(app: FastifyInstance, database: NamiDatabase,
     reply.header('Cache-Control', 'no-store');
     await resetOrganizerPassphrase(dataRoot, request.body.password);
     return { reset: true, backupCreated: true };
+  });
+
+  app.post<{ Body: { displayName: string; password: string } }>('/api/superadmin/organizer/replace', {
+    schema: { body: { type: 'object', additionalProperties: false, required: ['displayName', 'password'],
+      properties: {
+        displayName: { type: 'string', minLength: 1, maxLength: 80 },
+        password: passwordBody.properties.password,
+      } } },
+    preHandler: [sameOrigin, adminOnly],
+    config: { rateLimit: { max: 5, timeWindow: '1 hour', groupId: 'superadmin-replace' } },
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const name = request.body.displayName.trim();
+    if (!name) return reply.code(400).send({ error: 'Please enter the new organizer name.' });
+    const hash = await hashOrganizerPassword(request.body.password);
+    const original = database.prepare("SELECT id, display_name, password_hash FROM actors WHERE kind = 'organizer'")
+      .get() as { id: string; display_name: string; password_hash: string } | undefined;
+    if (!original) return reply.code(409).send({ error: 'There is no organizer to replace.' });
+    await verifiedBackup(database, dataRoot, 'organizer-before-replace', backup => {
+      const saved = backup.prepare('SELECT display_name, password_hash FROM actors WHERE id = ?')
+        .get(original.id) as { display_name: string; password_hash: string } | undefined;
+      return saved?.display_name === original.display_name && saved.password_hash === original.password_hash;
+    });
+    database.transaction(() => {
+      const changed = database.prepare(`UPDATE actors SET display_name = ?, password_hash = ?
+        WHERE id = ? AND kind = 'organizer' AND display_name = ? AND password_hash = ?`)
+        .run(name, hash, original.id, original.display_name, original.password_hash);
+      if (changed.changes !== 1) throw new Error('Organizer changed during replacement. Nothing was changed.');
+      database.prepare('DELETE FROM sessions WHERE actor_id = ?').run(original.id);
+    })();
+    return { replaced: true, backupCreated: true };
+  });
+
+  app.post<{ Body: { password: string; confirmation: string } }>('/api/superadmin/instance/reset', {
+    schema: { body: { type: 'object', additionalProperties: false, required: ['password', 'confirmation'],
+      properties: { password: passwordBody.properties.password,
+        confirmation: { type: 'string', maxLength: 40 } } } },
+    preHandler: [sameOrigin, adminOnly],
+    config: { rateLimit: { max: 8, timeWindow: '1 hour', groupId: 'superadmin-instance-reset' } },
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    if (request.body.confirmation !== RESET_PHRASE) {
+      return reply.code(400).send({ error: 'The reset phrase did not match.' });
+    }
+    const credential = currentHash(database);
+    if (!credential || !await verifyPassword(request.body.password, credential) || currentHash(database) !== credential) {
+      return reply.code(401).send({ error: 'The superadmin passphrase did not match.' });
+    }
+    if (maintenance.resetInProgress) return reply.code(409).send({ error: 'A reset is already in progress.' });
+    maintenance.resetInProgress = true;
+    try {
+      const deadline = Date.now() + 30_000;
+      while (maintenance.activeRequests > 1 && Date.now() < deadline) await delay(50);
+      if (maintenance.activeRequests > 1) return reply.code(409).send({ error: 'Other requests are still running. Try again shortly.' });
+      if (database.prepare('SELECT 1 FROM upload_sessions LIMIT 1').get()) {
+        return reply.code(409).send({ error: 'Finish or cancel unfinished uploads before resetting NAMI.' });
+      }
+      if (!database.prepare("SELECT 1 FROM actors WHERE kind = 'organizer'").get()) {
+        return reply.code(409).send({ error: 'NAMI has no organizer to reset.' });
+      }
+      let backup: string;
+      try { backup = await verifiedFullBackup(database, dataRoot); }
+      catch (error) {
+        app.log.error(error);
+        return reply.code(409).send({ error: 'NAMI could not verify a full backup. Nothing was erased.' });
+      }
+      database.transaction(() => {
+        if (database.prepare('SELECT 1 FROM upload_sessions LIMIT 1').get()) {
+          throw new Error('An upload appeared during reset. Nothing was erased.');
+        }
+        database.prepare('DELETE FROM invitations').run();
+        database.prepare('DELETE FROM events').run();
+        database.prepare('DELETE FROM sessions').run();
+        database.prepare('DELETE FROM actors').run();
+      })();
+      let cleanupPending = false;
+      for (const directory of mediaDirectories) {
+        for (const entry of await readdir(join(dataRoot, directory))) {
+          try { await rm(join(dataRoot, directory, entry), { force: true }); }
+          catch (error) { cleanupPending = true; app.log.error(error); }
+        }
+      }
+      return { reset: true, backupCreated: true, backup, cleanupPending };
+    } finally { maintenance.resetInProgress = false; }
   });
 }

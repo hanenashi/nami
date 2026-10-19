@@ -117,6 +117,9 @@ button:disabled { cursor: wait; opacity: .65; }
 .superadmin-reset { max-width: 720px; margin-top: 44px; }
 .superadmin-reset form { display: grid; gap: 22px; padding: 22px 4px 30px; }
 .superadmin-reset form p { margin: 0; line-height: 1.5; }
+.superadmin-danger { padding: 18px 20px 0; border: 1px solid #d9bdb8; background: #fff9f7; }
+.superadmin-danger summary { color: #9b3228; }
+.superadmin-danger .secondary-button { border-color: #9b3228; color: #9b3228; }
 .small-button:focus-visible { outline: 3px solid #203e36; outline-offset: 3px; }
 .invitation-page { max-width: 720px; padding: clamp(70px, 10vw, 140px) 0 80px; }
 .invitation-page h1 { font-size: clamp(48px, 6vw, 76px); }

@@ -143,6 +143,21 @@ export async function resetOrganizerFromSuperadmin(password: string) {
   }));
 }
 
+export async function replaceOrganizer(displayName: string, password: string) {
+  return readJson<{ replaced: true; backupCreated: true }>(await fetch('/api/superadmin/organizer/replace', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ displayName, password }),
+  }));
+}
+
+export async function resetNamiInstance(password: string, confirmation: string) {
+  return readJson<{ reset: true; backupCreated: true; backup: string; cleanupPending: boolean }>(
+    await fetch('/api/superadmin/instance/reset', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password, confirmation }),
+    }));
+}
+
 export async function getEvents() {
   return readJson<{ events: NamiEvent[] }>(await fetch('/api/events', { cache: 'no-store' }));
 }

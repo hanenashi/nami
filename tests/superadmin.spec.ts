@@ -61,6 +61,29 @@ test('owner can manage people and recover the organizer in the browser', async (
       payload: { password: 'initial organizer passphrase' } }), 401);
     assertStatus(await app.inject({ method: 'POST', url: '/api/auth/login', headers: origin,
       payload: { password: 'replacement organizer passphrase' } }), 200);
+
+    await page.getByText('Replace organizer, keep the album').click();
+    await page.getByLabel('New organizer name').fill('Family owner');
+    await page.getByLabel('Replacement passphrase', { exact: true }).fill('family owner passphrase');
+    await page.getByLabel('Repeat replacement passphrase').fill('family owner passphrase');
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'Replace organizer', exact: true }).click();
+    await expect(page.locator('.person-card').filter({ hasText: 'Family owner' })).toContainText('Family evening · organizer');
+    assertStatus(await app.inject({ method: 'POST', url: '/api/auth/login', headers: origin,
+      payload: { password: 'replacement organizer passphrase' } }), 401);
+    assertStatus(await app.inject({ method: 'POST', url: '/api/auth/login', headers: origin,
+      payload: { password: 'family owner passphrase' } }), 200);
+
+    await page.getByText('Erase NAMI and start over').click();
+    await page.getByLabel('Superadmin passphrase').fill('owner browser test passphrase');
+    await page.getByLabel('Type ERASE ALL NAMI DATA').fill('ERASE ALL NAMI DATA');
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'Erase NAMI data' }).click();
+    await expect(page.getByRole('status')).toContainText('NAMI was reset');
+    await expect(page.locator('.person-card')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Create one now' })).toBeVisible();
+    assertStatus(await app.inject({ url: `/api/events/${eventId}`, headers: { cookie } }), 401);
+    expect((await app.inject('/api/auth/status')).json().setupRequired).toBe(true);
   } finally {
     await app.close();
     await rm(dataRoot, { recursive: true, force: true });

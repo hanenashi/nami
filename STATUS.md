@@ -470,3 +470,31 @@ only accepted format now.
   4 media, 0 uploads, 1 superadmin credential and 2 superadmin sessions. All 8
   active media files still match by SHA-256. The page responds, the people API
   rejects unauthenticated access, and no live guest was deleted.
+
+## Organizer replacement and full reset increment
+
+- Added two distinct superadmin actions for a temporary organizer such as
+  `test`. Replacement changes the organizer name and passphrase in place after
+  a verified SQLite backup, signs out old organizer sessions, and preserves
+  event/photo/invitation ownership. Existing photo attribution shows the new
+  name because the actor identity is reused.
+- Full reset requires the separate superadmin passphrase, the exact phrase
+  `ERASE ALL NAMI DATA`, and a final browser confirmation. It pauses other
+  requests, rejects unfinished uploads, verifies a private SQLite and media
+  backup (including original-photo hashes), then clears actors, sessions,
+  events, invitations, photos and active media files. Superadmin access remains
+  so the owner can set up a fresh organizer.
+- Disposable API tests cover replacement, backup failures, auth checks,
+  unfinished uploads, full restore contents, empty state, and fresh organizer
+  setup. Browser tests run both choices on desktop Chromium and iPad/iPhone
+  WebKit. The final checks passed: 12 API tests and 15 browser tests. No live
+  organizer, event, guest, invitation or photo was changed by these tests.
+- While this increment was in development, the live instance changed through
+  separate user activity to 1 organizer, 0 guests, 0 events and 0 photos. The
+  service was stopped and this current state snapshotted at
+  `../nami-backups/pre-organizer-options-20261019-144410`: all 29 files matched
+  SHA-256, SQLite integrity/foreign keys passed, and the rebuilt service came
+  back healthy. Post-deploy counts still match (1 actor, 0 sessions, 0 events,
+  0 invitations, 0 media, 1 superadmin credential, 2 superadmin sessions).
+  Both new write routes deny unauthenticated requests; the service remains
+  loopback-only. Neither organizer option was run against live data.
