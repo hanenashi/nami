@@ -203,6 +203,34 @@ export async function registerMedia(
     return { media: rows.map(serializeMedia) };
   });
 
+  app.delete<{ Params: { eventId: string }; Body: { ids: string[] } }>('/api/events/:eventId/media', {
+    preHandler: [sameOrigin, signedIn],
+    bodyLimit: 256 * 1024,
+    schema: { body: { type: 'object', required: ['ids'], additionalProperties: false,
+      properties: { ids: { type: 'array', minItems: 1, maxItems: 5000, uniqueItems: true,
+        items: { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' } } } } },
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const role = findEventRole(database, request.namiActor!.id, request.params.eventId);
+    if (!role) return reply.code(404).send({ error: 'Event not found.' });
+    if (role !== 'organizer') return reply.code(403).send({ error: 'Only the organizer can remove photos.' });
+    const ids = request.body.ids;
+    const remove = database.transaction(() => {
+      const existing = database.prepare('SELECT id FROM media WHERE id = ? AND event_id = ?');
+      if (ids.some(id => !existing.get(id, request.params.eventId))) return false;
+      const statement = database.prepare('DELETE FROM media WHERE id = ? AND event_id = ?');
+      for (const id of ids) statement.run(id, request.params.eventId);
+      return true;
+    });
+    if (!remove()) return reply.code(404).send({ error: 'One or more photos were not found. Refresh the album and try again.' });
+    for (const id of ids) {
+      for (const directory of ['originals', 'previews']) {
+        await removeIfPresent(join(dataRoot, directory, `${id}.jpg`)).catch(error => app.log.error(error));
+      }
+    }
+    return { removed: ids.length };
+  });
+
   app.post<{ Params: { eventId: string } }>('/api/events/:eventId/media', {
     preHandler: [sameOrigin, signedIn],
     config: { rateLimit: { max: 10, timeWindow: '1 minute', groupId: 'jpeg-upload' } },

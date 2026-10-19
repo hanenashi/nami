@@ -38,7 +38,7 @@ export async function buildApp(options: { dataRoot: string; webRoot: string; log
     return { status: 'ok', service: 'nami' };
   });
   await registerAuth(app, database, options.secureCookies ?? false);
-  registerEvents(app, database, options.secureCookies ?? false);
+  registerEvents(app, database, options.dataRoot, options.secureCookies ?? false);
   registerInvitations(app, database, options.secureCookies ?? false);
   await registerMedia(app, database, options.dataRoot, options.secureCookies ?? false);
   await registerUploads(app, database, options.dataRoot, options.secureCookies ?? false);

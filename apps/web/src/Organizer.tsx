@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import {
   createEvent,
   createInvitation,
+  deleteEvent,
   getAuthStatus,
   getEvent,
   getEvents,
@@ -379,6 +380,11 @@ function EventDetail({ eventId }: { eventId: string }) {
   const [invitations, setInvitations] = useState<Invitation[] | null>(null);
   const [media, setMedia] = useState<NamiMedia[] | null>(null);
   const [error, setError] = useState('');
+  const [showDelete, setShowDelete] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     let ignore = false;
@@ -404,6 +410,19 @@ function EventDetail({ eventId }: { eventId: string }) {
   }
   if (!event || !invitations || !media) return <p className="page-message">Opening event…</p>;
 
+  async function removeEvent() {
+    if (!event || confirmTitle !== event.title || !acknowledged) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await deleteEvent(event.id, confirmTitle);
+      location.href = '/organizer';
+    } catch (reason) {
+      setDeleteError(reason instanceof Error ? reason.message : 'Couldn’t delete this event.');
+      setDeleting(false);
+    }
+  }
+
   return (
     <article className="event-detail event-album">
       <header className="album-header">
@@ -422,6 +441,20 @@ function EventDetail({ eventId }: { eventId: string }) {
       <details className="album-invitations" id="album-invitations">
         <summary>People &amp; invitations</summary>
         <InvitationsPanel eventId={event.id} initialInvitations={invitations} />
+      </details>
+      <details className="event-settings">
+        <summary>Event settings</summary>
+        {!showDelete ? <button type="button" className="quiet-danger" onClick={() => setShowDelete(true)}>Delete event…</button> :
+          <div className="delete-event-panel">
+            <p>Deleting this event also removes its photos and invitations. This cannot be undone.</p>
+            {deleteError ? <p className="form-error" role="alert">{deleteError}</p> : null}
+            <label className="field"><span>Type the event name to confirm</span><input type="text" value={confirmTitle} onChange={event => setConfirmTitle(event.target.value)} autoComplete="off" /></label>
+            <label className="delete-acknowledge"><input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} /> I understand the photos and invitations will be removed.</label>
+            <div className="delete-event-actions">
+              <button type="button" className="remove-photos" disabled={deleting || confirmTitle !== event.title || !acknowledged} onClick={() => void removeEvent()}>{deleting ? 'Deleting…' : 'Delete event permanently'}</button>
+              <button type="button" disabled={deleting} onClick={() => { setShowDelete(false); setConfirmTitle(''); setAcknowledged(false); }}>Cancel</button>
+            </div>
+          </div>}
       </details>
     </article>
   );

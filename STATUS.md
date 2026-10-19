@@ -195,11 +195,11 @@ Pixel touch, long batches and real photographs remain to check.
 
 ## Next task
 
-Refresh the Pixel's existing Kiwi tab after its failed batch, reselect the same
-JPEGs in normal mobile-site mode, and check a real interrupted/retried transfer.
-Then ask the iPad/iPhone testers for UX feedback before family invitations.
-After UX, return to M2 quota/ledger work, browser interruption/large-batch
-checks and HEIC decoder probing. JPEG remains the only accepted format now.
+Retry the Pixel's paused batch with the SSH tunnel stable, then check real
+interrupted/retried transfers and iPad/iPhone tester feedback before family
+invitations. After UX, return to M2 quota/ledger work, browser
+interruption/large-batch checks and HEIC decoder probing. JPEG remains the
+only accepted format now.
 
 ## M2 transport increment
 
@@ -299,3 +299,32 @@ checks and HEIC decoder probing. JPEG remains the only accepted format now.
 - The existing Kiwi tab still holds the old JavaScript until refreshed. A real
   Pixel retry on the new build remains unverified. The desktop-site screenshot
   appeared clipped; check normal mobile-site mode before assessing layout.
+
+## Organizer removal increment
+
+- On the Pixel, the later batch retry showed “Connection interrupted” on its
+  first 2.3 MB JPEG with three files waiting; the private tunnel and NAMI health
+  check subsequently answered. The queue stopped after the first failure,
+  without another ten-session 429 cascade. The live queue/photos were untouched.
+- Organizer albums now offer a selection mode with All, None and Reverse and a
+  confirmation before permanently removing selected photos. Guest albums keep
+  their uncluttered view. Event settings require the exact event title and a
+  separate acknowledgement before event/photo/invitation removal.
+- API deletion checks organizer access and same origin, rejects a mixed-event
+  photo selection atomically, removes private original/preview files and clears
+  unfinished upload sessions/files when deleting an event. Tests use disposable
+  data; no live data was deleted.
+- `npm run check` passed lint, TypeScript, production builds and 8 API tests.
+  `npm run test:e2e` passed 12 tests in desktop Chromium and WebKit iPad/iPhone
+  profiles. Tests exercise selection All/None/Reverse, cancellation,
+  confirmation and event deletion. The iPhone selection screen was visually
+  inspected; physical iPad/iPhone/Pixel removal has not been exercised.
+- Before deployment, the container was stopped and a complete active-data
+  snapshot was saved at `../nami-backups/pre-removal-20261019-2143` with a
+  SHA-256 manifest. A disposable restore started the current app and passed
+  health, SQLite integrity and foreign-key checks with all 25 media rows.
+- The rebuilt live container is healthy and still bound only to
+  `127.0.0.1:3000`. Before and after deployment: 3 actors, 6 sessions,
+  2 events, 4 access rows, 3 invitations, 25 media rows and 1 unfinished upload
+  session. Every original, preview and staged-upload file matches the backup
+  manifest. No live deletion endpoint was called.

@@ -151,10 +151,31 @@ button:disabled { cursor: wait; opacity: .65; }
 .add-photos-action input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .add-icon { font-size: 25px; line-height: .8; font-weight: 400; }
 .photo-count { color: #62746c; font-size: 15px; white-space: nowrap; }
+.album-action-end { display: flex; align-items: center; gap: 12px; }
+.album-select-button, .photo-selection button, .delete-confirm button, .delete-event-actions button, .quiet-danger { border: 0; padding: 8px 10px; color: #315146; background: transparent; font: inherit; font-weight: 600; cursor: pointer; }
+.album-select-button { min-height: 44px; }
+.photo-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 14px; padding: 10px 12px; background: #eef3ef; color: #315146; font-size: 14px; }
+.photo-selection-actions { display: flex; flex-wrap: wrap; gap: 2px; }
+.photo-selection .remove-photos { margin-left: auto; }
+.remove-photos, .quiet-danger { color: #9b3228 !important; }
+.remove-photos:disabled { opacity: .5; cursor: default; }
+.delete-confirm, .delete-event-panel { margin: 0 0 16px; padding: 16px; border: 1px solid #d9bdb8; background: #fff9f7; }
+.delete-confirm p, .delete-event-panel p { margin: 0 0 12px; }
+.delete-confirm .remove-photos, .delete-event-actions .remove-photos { border: 1px solid #9b3228; border-radius: 4px; padding: 10px 14px; }
+.delete-event-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.delete-acknowledge { display: flex; align-items: flex-start; gap: 10px; margin-top: 14px; font-size: 15px; }
+.delete-acknowledge input { width: 20px; height: 20px; flex: 0 0 auto; }
+.event-settings { margin-top: 8px; border-top: 1px solid var(--line); }
+.event-settings summary { min-height: 56px; color: #62746c; font-size: 15px; }
+.event-settings .quiet-danger { margin: 8px 0 18px; }
 .album-error { margin: 0 0 12px; }
 .event-album .photo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-.photo-grid li { min-width: 0; }
+.photo-grid li { min-width: 0; position: relative; }
 .photo-tile { display: block; width: 100%; aspect-ratio: 1; border: 0; padding: 0; overflow: hidden; background: #e8efec; cursor: zoom-in; }
+.photo-tile.is-selecting { position: relative; cursor: pointer; }
+.photo-tile.is-selected::after { position: absolute; inset: 0; border: 4px solid #e6f2e9; background: #173a2b33; content: ''; pointer-events: none; }
+.selection-mark { position: absolute; z-index: 1; top: 8px; right: 8px; display: grid; place-items: center; width: 27px; height: 27px; border: 2px solid #fff; border-radius: 50%; color: #fff; background: #15251a88; font-size: 17px; line-height: 1; }
+.is-selected .selection-mark { background: #315b46; }
 .photo-tile img { width: 100%; height: 100%; max-height: none; object-fit: cover; }
 .photo-tile:hover img { filter: brightness(.94); }
 .photo-tile:focus-visible { outline: 3px solid #203e36; outline-offset: -3px; }

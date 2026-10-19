@@ -111,6 +111,13 @@ export async function createEvent(input: {
   }));
 }
 
+export async function deleteEvent(eventId: string, confirmTitle: string) {
+  const response = await fetch(`/api/events/${encodeURIComponent(eventId)}`, {
+    method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirmTitle }),
+  });
+  if (!response.ok) await readJson(response);
+}
+
 export async function getInvitations(eventId: string) {
   return readJson<{ invitations: Invitation[] }>(await fetch(`/api/events/${encodeURIComponent(eventId)}/invitations`, { cache: 'no-store' }));
 }
@@ -147,6 +154,12 @@ export async function redeemInvitation(secret: string, nickname?: string) {
 
 export async function getMedia(eventId: string) {
   return readJson<{ media: NamiMedia[] }>(await fetch(`/api/events/${encodeURIComponent(eventId)}/media`, { cache: 'no-store' }));
+}
+
+export async function deleteMedia(eventId: string, ids: string[]) {
+  return readJson<{ removed: number }>(await fetch(`/api/events/${encodeURIComponent(eventId)}/media`, {
+    method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }),
+  }));
 }
 
 export async function uploadPhoto(eventId: string, photo: File) {

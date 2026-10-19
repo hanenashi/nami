@@ -298,9 +298,11 @@ to add photos. Keep the service private and preserve live data during deployment
 **Exit:** originals match original checksums, derivatives are generated, retries survive restart.
 
 ### M4 — Gallery and downloads
-- [ ] Responsive grid, capture-time timeline, lightbox, contributor label.
-- [ ] Secured original download; appropriate placeholder/error display.
-- [ ] Organizer removal, visibility and access controls.
+- [x] Responsive grid, lightbox, discreet contributor label.
+- [x] Secured original download.
+- [x] Organizer selection (All/None/Reverse) and confirmed photo/event removal.
+- [ ] Capture-time timeline and broken-preview placeholder.
+- [ ] Visibility controls beyond event access roles.
 - [ ] Czech/Japanese/English-ready copy.
 - [ ] Real browser flow on at least desktop and available phone(s).
 
@@ -333,6 +335,8 @@ to add photos. Keep the service private and preserve live data during deployment
 | Missing EXIF time | Predictable chronological fallback, marked as fallback |
 | Delete preview | Can regenerate from original |
 | Delete event reference | Other events and shared blob not harmed |
+| Delete selected photos | Organizer-only; reject cross-event IDs atomically; remove originals and previews |
+| Delete event | Exact title plus acknowledgement; remove DB associations, photos and staged uploads |
 | Restore backup to separate instance | Events and media work, SHA-256 checks match |
 | Phone + desktop browsers | Usable layout, honest progress, navigation works |
 

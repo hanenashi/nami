@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { type EventAccess, type NamiMedia } from './api.js';
+import { deleteMedia, type EventAccess, type NamiMedia } from './api.js';
 import { PhotoViewer } from './PhotoViewer.js';
 import { cancelResumable, uploadResumable, UploadFailure } from './resumable.js';
 
@@ -28,6 +28,10 @@ export function EventPhotos({ eventId, role, initialMedia }: {
   const [error, setError] = useState('');
   const [batch, setBatch] = useState<BatchItem[]>([]);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const batchRef = useRef<BatchItem[]>([]);
   const openerRef = useRef<HTMLButtonElement | null>(null);
   const active = useRef<AbortController | null>(null);
@@ -145,6 +149,29 @@ export function EventPhotos({ eventId, role, initialMedia }: {
     requestAnimationFrame(() => openerRef.current?.focus({ preventScroll: true }));
   }
 
+  function toggleSelection(id: string) {
+    setConfirmDelete(false);
+    setSelected(current => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function leaveSelection() { setSelecting(false); setSelected(new Set()); setConfirmDelete(false); }
+  async function removeSelected() {
+    setDeleting(true);
+    setError('');
+    try {
+      await deleteMedia(eventId, [...selected]);
+      setMedia(current => current.filter(photo => !selected.has(photo.id)));
+      leaveSelection();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Couldn’t remove those photos.');
+      setConfirmDelete(false);
+    } finally { setDeleting(false); }
+  }
+
   return (
     <section className="photos" aria-labelledby="photos-heading">
       <h2 id="photos-heading" className="visually-hidden">Photos</h2>
@@ -156,9 +183,26 @@ export function EventPhotos({ eventId, role, initialMedia }: {
             <input aria-label="Add photos" type="file" accept="image/jpeg,.jpg,.jpeg" multiple onChange={choosePhotos} />
           </label>
         ) : null}
-        <span className="photo-count">{media.length} {media.length === 1 ? 'photo' : 'photos'}</span>
+        <div className="album-action-end">
+          <span className="photo-count">{media.length} {media.length === 1 ? 'photo' : 'photos'}</span>
+          {role === 'organizer' && media.length ? <button className="album-select-button" type="button" onClick={() => selecting ? leaveSelection() : setSelecting(true)}>{selecting ? 'Done' : 'Select'}</button> : null}
+        </div>
       </div>
       {error ? <p className="form-error album-error" role="alert">{error}</p> : null}
+      {selecting ? <div className="photo-selection" aria-label="Photo selection">
+        <span>{selected.size} selected</span>
+        <div className="photo-selection-actions">
+          <button type="button" onClick={() => { setSelected(new Set(media.map(photo => photo.id))); setConfirmDelete(false); }}>All</button>
+          <button type="button" onClick={() => { setSelected(new Set()); setConfirmDelete(false); }}>None</button>
+          <button type="button" onClick={() => { setSelected(current => new Set(media.filter(photo => !current.has(photo.id)).map(photo => photo.id))); setConfirmDelete(false); }}>Reverse</button>
+        </div>
+        {selected.size ? <button className="remove-photos" type="button" onClick={() => setConfirmDelete(true)}>Remove selected</button> : null}
+      </div> : null}
+      {confirmDelete ? <div className="delete-confirm" role="group" aria-label="Confirm photo removal">
+        <p>Remove {selected.size} {selected.size === 1 ? 'photo' : 'photos'} from this event? This cannot be undone.</p>
+        <button className="remove-photos" type="button" disabled={deleting} onClick={() => void removeSelected()}>{deleting ? 'Removing…' : `Yes, remove ${selected.size}`}</button>
+        <button type="button" disabled={deleting} onClick={() => setConfirmDelete(false)}>Keep photos</button>
+      </div> : null}
       {visibleBatch.length > 0 ? (
         <div className="upload-progress">
           <details open={failedCount > 0 ? true : undefined}>
@@ -187,8 +231,12 @@ export function EventPhotos({ eventId, role, initialMedia }: {
         <ul className="photo-grid">
           {media.map((photo, index) => (
             <li key={photo.id}>
-              <button className="photo-tile" type="button" aria-label={`Open photo ${index + 1} of ${media.length}, shared by ${photo.uploaderName}`} onClick={event => openPhoto(index, event.currentTarget)}>
+              <button className={`photo-tile${selecting ? ' is-selecting' : ''}${selected.has(photo.id) ? ' is-selected' : ''}`} type="button"
+                aria-label={selecting ? `Select photo ${index + 1} of ${media.length}` : `Open photo ${index + 1} of ${media.length}, shared by ${photo.uploaderName}`}
+                aria-pressed={selecting ? selected.has(photo.id) : undefined}
+                onClick={event => selecting ? toggleSelection(photo.id) : openPhoto(index, event.currentTarget)}>
                 <img src={photo.previewPath} alt="" width={photo.previewWidth} height={photo.previewHeight} loading="lazy" />
+                {selecting ? <span className="selection-mark" aria-hidden="true">{selected.has(photo.id) ? '✓' : ''}</span> : null}
               </button>
             </li>
           ))}

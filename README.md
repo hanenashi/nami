@@ -20,6 +20,13 @@ interruption when the same files are selected again. Other photo and video
 formats come later. NAMI is not ready for real family photographs or internet
 traffic yet.
 
+In an organizer album, **Select** switches thumbnails into selection mode.
+Use **All**, **None**, or **Reverse**, then confirm **Remove selected**. Removing
+photos deletes their original and preview files. **Event settings** contains
+event deletion; it asks for the exact event name and a separate acknowledgement
+because it also removes photos and invitations. Keep a verified backup before
+using either permanent action on valued photographs.
+
 ## Start on Beechan
 
 Docker Engine and Docker Compose v2 are required. From a terminal:
@@ -127,8 +134,9 @@ revoked by the organizer; anyone who receives the link can use that access until
 then. Each upload accepts one JPEG up to 25 MB, verifies the actual file,
 stores its SHA-256, and generates a metadata-stripped preview. Original downloads
 retain the exact uploaded bytes and may therefore retain EXIF/GPS. The same-disk
-`backups/` folder is not disaster recovery; backup/restore remains unimplemented
-and is required before real family use.
+`backups/` folder is not disaster recovery. Manual full snapshots and disposable
+restore checks have been done for updates, but scheduled and off-host backups
+are still required before real family use.
 
 ## Development and checks
 
@@ -148,6 +156,8 @@ Browser tests start a temporary server on `127.0.0.1:3100` with disposable data,
 then stop it and remove that data. They cover Chromium desktop and WebKit with
 iPad/iPhone device settings, including organizer setup, logout, repeat login,
 creating and reopening an event, guest redemption, repeat access and revocation.
+They also cover organizer photo selection/removal and double-confirmed event
+deletion using disposable generated JPEGs.
 The contributor flow also uploads a generated JPEG and displays its preview on
 the organizer and guest screens. WebKit emulation is not a physical Safari test.
 Some Linux hosts need Playwright's system libraries; use

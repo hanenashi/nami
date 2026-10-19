@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
+import { unlink } from 'node:fs/promises';
+import { join } from 'node:path';
 import { requireActor, requireOrganizer, requireSameOrigin } from './auth.js';
 import type { NamiDatabase } from './database.js';
 
@@ -73,7 +75,7 @@ function serializeEvent(row: EventRow) {
   };
 }
 
-export function registerEvents(app: FastifyInstance, database: NamiDatabase, secureCookies: boolean) {
+export function registerEvents(app: FastifyInstance, database: NamiDatabase, dataRoot: string, secureCookies: boolean) {
   const organizerOnly = requireOrganizer(database);
   const signedIn = requireActor(database);
 
@@ -146,5 +148,37 @@ export function registerEvents(app: FastifyInstance, database: NamiDatabase, sec
       FROM events WHERE id = ?
     `).get(id) as EventRow;
     return reply.code(201).send({ event: serializeEvent(event) });
+  });
+
+  app.delete<{ Params: { eventId: string }; Body: { confirmTitle: string } }>('/api/events/:eventId', {
+    preHandler: [requireSameOrigin(secureCookies), organizerOnly],
+    schema: { body: { type: 'object', required: ['confirmTitle'], additionalProperties: false,
+      properties: { confirmTitle: { type: 'string', minLength: 1, maxLength: 120 } } } },
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const row = database.prepare('SELECT title FROM events WHERE id = ? AND owner_id = ?')
+      .get(request.params.eventId, request.namiActor!.id) as { title: string } | undefined;
+    if (!row) return reply.code(404).send({ error: 'Event not found.' });
+    if (request.body.confirmTitle !== row.title) return reply.code(400).send({ error: 'Event name did not match.' });
+    const pending = database.prepare('SELECT id FROM upload_sessions WHERE event_id = ?')
+      .all(request.params.eventId) as { id: string }[];
+    const media = database.prepare('SELECT id FROM media WHERE event_id = ?').all(request.params.eventId) as { id: string }[];
+    database.transaction(() => {
+      database.prepare('DELETE FROM upload_sessions WHERE event_id = ?').run(request.params.eventId);
+      database.prepare('DELETE FROM events WHERE id = ? AND owner_id = ?').run(request.params.eventId, request.namiActor!.id);
+    })();
+    for (const { id } of pending) {
+      await unlink(join(dataRoot, 'uploads', id)).catch(error => {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') app.log.error(error);
+      });
+    }
+    for (const { id } of media) {
+      for (const directory of ['originals', 'previews']) {
+        await unlink(join(dataRoot, directory, `${id}.jpg`)).catch(error => {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') app.log.error(error);
+        });
+      }
+    }
+    return reply.code(204).send();
   });
 }

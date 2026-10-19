@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -579,4 +579,50 @@ test('a contributor can preserve one JPEG while viewer and cross-event writes ar
   assert.equal((await app.inject({
     url: `/api/events/${eventB}/media/${uploadedMedia.id}/preview`, headers: { cookie: viewerCookie },
   })).statusCode, 404);
+
+  const otherMultipart = multipartPhoto(jpeg);
+  const otherUpload = await app.inject({ method: 'POST', url: `/api/events/${eventB}/media`,
+    headers: { ...organizerHeaders, ...otherMultipart.headers }, payload: otherMultipart.payload });
+  assert.equal(otherUpload.statusCode, 201);
+  const otherId = otherUpload.json().media.id as string;
+  const currentContributorCookie = await makeGuest(eventA, 'contributor', 'Cousin Jo');
+  const photoDelete = (cookie: string, ids: string[], eventId = eventA, origin = 'http://nami.test') => app.inject({
+    method: 'DELETE', url: `/api/events/${eventId}/media`,
+    headers: { host: 'nami.test', origin, cookie }, payload: { ids },
+  });
+  assert.equal((await photoDelete(viewerCookie, [uploadedMedia.id])).statusCode, 403);
+  assert.equal((await photoDelete(currentContributorCookie, [uploadedMedia.id])).statusCode, 403);
+  assert.equal((await photoDelete(organizerCookie, [uploadedMedia.id], eventA, 'http://elsewhere.test')).statusCode, 403);
+  assert.equal((await photoDelete(organizerCookie, [uploadedMedia.id, otherId])).statusCode, 404);
+  assert.equal((await stat(originalPath)).size, jpeg.length);
+  assert.equal((await photoDelete(organizerCookie, [uploadedMedia.id])).json().removed, 1);
+  await assert.rejects(stat(originalPath), { code: 'ENOENT' });
+  await assert.rejects(stat(previewPath), { code: 'ENOENT' });
+  assert.equal((await app.inject({ url: `/api/events/${eventA}/media`, headers: organizerHeaders })).json().media.length, 0);
+  assert.equal((await app.inject({ url: `/api/events/${eventB}/media`, headers: organizerHeaders })).json().media.length, 1);
+
+  const eventDelete = (confirmTitle: string, origin = 'http://nami.test') => app.inject({
+    method: 'DELETE', url: `/api/events/${eventB}`,
+    headers: { host: 'nami.test', origin, cookie: organizerCookie }, payload: { confirmTitle },
+  });
+  assert.equal((await eventDelete('Wrong title')).statusCode, 400);
+  assert.equal((await eventDelete('Other event', 'http://elsewhere.test')).statusCode, 403);
+  assert.equal((await app.inject({ method: 'DELETE', url: `/api/events/${eventB}`,
+    headers: { ...sameOriginHeaders, cookie: viewerCookie }, payload: { confirmTitle: 'Other event' },
+  })).statusCode, 401);
+  const writable = new Database(join(dataRoot, 'db', 'nami.sqlite'));
+  const organizerId = (writable.prepare("SELECT id FROM actors WHERE kind = 'organizer'").get() as { id: string }).id;
+  const pendingId = randomUUID();
+  writable.prepare('INSERT INTO upload_sessions (id, actor_id, event_id, metadata) VALUES (?, ?, ?, ?)')
+    .run(pendingId, organizerId, eventB, '{}');
+  const pendingPath = join(dataRoot, 'uploads', pendingId);
+  await writeFile(pendingPath, 'incomplete JPEG fixture');
+  assert.equal((await eventDelete('Other event')).statusCode, 204);
+  assert.equal((writable.prepare('SELECT count(*) AS count FROM upload_sessions WHERE id = ?').get(pendingId) as { count: number }).count, 0);
+  writable.close();
+  await assert.rejects(stat(pendingPath), { code: 'ENOENT' });
+  await assert.rejects(stat(join(dataRoot, 'originals', `${otherId}.jpg`)), { code: 'ENOENT' });
+  await assert.rejects(stat(join(dataRoot, 'previews', `${otherId}.jpg`)), { code: 'ENOENT' });
+  assert.equal((await app.inject({ url: `/api/events/${eventB}`, headers: organizerHeaders })).statusCode, 404);
+  assert.equal((await app.inject({ url: `/api/events/${eventA}`, headers: organizerHeaders })).statusCode, 200);
 });
