@@ -1,6 +1,6 @@
 # NAMI status
 
-2026-10-19 — M0 complete and verified locally, including Docker.
+2026-10-19 — M0 complete. M1 organizer access complete; private events next.
 
 ## Working locally
 
@@ -10,12 +10,16 @@
 - External data-root initialization, private directories, no static data access.
 - Locked dependencies, TypeScript, ESLint, API tests and Playwright smoke checks.
 - Single-service Dockerfile/Compose configuration and copy-paste README commands.
+- One-time local organizer setup, persistent SQLite identity, passphrase login,
+  seven-day session and sign out at `/organizer`.
+- Scrypt passphrase hashing, hashed session tokens, HttpOnly SameSite cookies,
+  same-origin checks and basic login/setup throttling.
 
 ## Verified
 
-- `npm run check`: lint, typecheck, production builds and 2 API tests passed.
-- `npm run test:e2e` against the local production build: 3 tests passed
-  (Chromium desktop, WebKit iPad and iPhone profiles).
+- `npm run check`: lint, typecheck, production builds and 3 API tests passed.
+- `npm run test:e2e` against the local production build: 6 tests passed across
+  Chromium desktop and WebKit iPad/iPhone profiles.
 - Health response, page title/content, keyboard and touch disclosure open/close,
   no application console errors or horizontal overflow.
 - Visual inspection at desktop 1505×1045, iPad 810×1080, iPhone 390×664 and
@@ -36,6 +40,18 @@
   from inside the replacement container and on the host.
 - Container inspection confirmed healthy status, UID/GID 1000:1000, read-only
   root filesystem and a port binding restricted to 127.0.0.1.
+- M1 API checks: setup validation, cross-origin rejection, one-organizer limit,
+  session cookie flags, logout, repeat login and restart persistence passed.
+- M1 database inspection confirmed neither the passphrase nor the raw session
+  token is stored. `npm run check` passed with 3 API tests.
+- M1 browser flow passed in desktop Chromium and WebKit iPad/iPhone profiles:
+  first setup, signed-in state, logout and repeat login. All three layouts were
+  inspected and had no horizontal overflow.
+- The M1 Docker image rebuilt successfully. All 6 browser tests passed against
+  an isolated container, and the organizer record survived forced recreation.
+  Its database directory and file were mode `0700` and `0600`, respectively.
+- Beechan's account is in the `docker` group. New login sessions can run Docker
+  without `sudo`; the existing Codex session was verified with `sg docker`.
 
 ## Fixes during verification
 
@@ -44,15 +60,16 @@
 - Separated manual screenshot capture from browser interaction checks: Playwright
   WebKit injects an inline screenshot stylesheet that the CSP rejects. Normal
   page loading and interactions have no such console error. CSP stayed strict.
+- Added compiler tools to the disposable Docker build stage because the Node 22
+  image had no matching prebuilt `better-sqlite3` binary. The runtime stays slim.
 
 ## Not verified / not built
 
-No organizer account, events, invitations, media ingestion, HEIC processing,
-gallery, database, backups, public deployment or real family photos yet.
+No events, invitations, media ingestion, HEIC processing, gallery, backups,
+public deployment or real family photos yet. No physical iPad/iPhone test yet.
 
 ## Next task
 
-Start M1 with **secure local organizer bootstrap and login**, without default
-credentials. Keep all checks local.
-After private event access works, build one JPEG's complete upload → preview →
-download flow, then verify HEIC in the real container before bulk uploads.
+Add **create/list event and event details** for the signed-in organizer, with
+authorization enforced in the API. Keep the first event form small. Invitations
+come in the following slice.

@@ -216,7 +216,7 @@ Backup design must coordinate the database snapshot with original files and GC.
 **Exit:** clean clone runs without paid/external services and shows NAMI page.
 
 ### M1 — Private events and invitations
-- [ ] Secure organizer bootstrap and local login/session.
+- [x] Secure organizer bootstrap and local login/session.
 - [ ] Create/list event, view event details.
 - [ ] Create, redeem and revoke viewer/contributor invitation; nickname and scoped guest session.
 - [ ] Robust role/access enforcement across two test events.

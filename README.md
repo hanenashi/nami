@@ -11,9 +11,9 @@ A small, self-hostable place for family and friends to share photographs from
 one gathering. The first testers use an iPad and iPhone; simple screens and
 Safari compatibility come first.
 
-Current milestone: **M0, local bootstrap**. A welcome page and API healthcheck
-work. Accounts, events, invitations, uploads and galleries do not exist yet.
-This is not ready to accept family photographs or internet traffic.
+Current milestone: **M1, private events and invitations**. Local organizer setup,
+login and logout work. Events, invitations, uploads and galleries do not exist
+yet. This is not ready to accept family photographs or internet traffic.
 
 ## Start on Beechan
 
@@ -23,18 +23,29 @@ Docker Engine and Docker Compose v2 are required. From a terminal:
 cd /home/beechan/GIT/nami
 mkdir -p ../nami-data
 chmod 700 ../nami-data
-sudo docker compose up --build -d --wait
+docker compose up --build -d --wait
 ```
+
+On Beechan, `beechan` is a member of the `docker` group, so Docker commands do
+not need `sudo`. Open a new login session after that membership changes; an
+already-open shell can use `newgrp docker`. Membership in this group grants
+[root-level privileges](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user),
+so do not add untrusted accounts.
 
 Open **http://127.0.0.1:3000** in a browser on Beechan. This address refers to
 Beechan only; it will not open NAMI on someone else's iPad. Remote family access
 comes later, after access controls and an explicitly approved deployment.
 
+First visit: open **http://127.0.0.1:3000/organizer**, enter your name, and choose
+a passphrase of at least 12 characters. This creates the single organizer
+account. Later visits show the sign-in form. There is no email recovery yet, so
+store the passphrase in your password manager.
+
 Check that it is running:
 
 ```sh
 curl --fail http://127.0.0.1:3000/api/health
-sudo docker compose ps
+docker compose ps
 ```
 
 The health response is `{"status":"ok","service":"nami"}`. Startup checks that
@@ -44,14 +55,14 @@ monitor or a claim that future upload/storage features have been verified.
 Stop:
 
 ```sh
-sudo docker compose down
+docker compose down
 ```
 
 Rebuild after a reviewed code update:
 
 ```sh
 git pull --ff-only
-sudo docker compose up --build -d --wait
+docker compose up --build -d --wait
 ```
 
 Stopping or rebuilding preserves the external data directory. Do not delete it
@@ -83,14 +94,17 @@ root-owned data folder. The container runs as an unprivileged user.
 Optionally copy `.env.example` to `.env`, make it mode `0600`, and edit its
 non-secret settings before starting. `NAMI_DATA_DIR` sets the host directory;
 inside the container the path is always `/data`. `NAMI_PORT` changes the host
-port. The Compose port is explicitly bound to **127.0.0.1**, not the LAN or public
-internet. There is deliberately no public-bind toggle in M0.
+port. `NAMI_SECURE_COOKIES` stays `false` for local HTTP and must be `true` under
+HTTPS. The Compose port is explicitly bound to **127.0.0.1**, not the LAN or
+public internet. There is deliberately no public-bind toggle yet.
 
 Only built web assets are served. The data tree is never a static web directory.
 Data, photographs, databases, backups and local environment files must stay out
 of this public repository. `.dockerignore` allowlists application build inputs.
-The same-disk `backups/` folder is not disaster recovery; backup/restore remains
-unimplemented and is required before real family use.
+Organizer data and hashed sessions live in `db/nami.sqlite`. Passphrases are
+hashed with scrypt; session cookies are HttpOnly and their raw values are not
+stored in the database. The same-disk `backups/` folder is not disaster recovery;
+backup/restore remains unimplemented and is required before real family use.
 
 ## Development and checks
 
@@ -108,7 +122,8 @@ npm run test:e2e
 `check` runs ESLint, TypeScript checking, both production builds, and API tests.
 Browser tests start a temporary server on `127.0.0.1:3100` with disposable data,
 then stop it and remove that data. They cover Chromium desktop and WebKit with
-iPad/iPhone device settings. WebKit emulation is not a physical Safari test.
+iPad/iPhone device settings, including organizer setup, logout and repeat login.
+WebKit emulation is not a physical Safari test.
 Some Linux hosts need Playwright's system libraries; use
 `sudo npx playwright install-deps chromium webkit` when the browser installer
 reports missing dependencies. Test results go to

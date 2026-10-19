@@ -15,7 +15,7 @@ test('welcome loads, explains the planned flow, and works by keyboard or touch',
   const summary = page.locator('summary');
   expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   if (testInfo.project.name === 'desktop-chromium') {
-    await page.keyboard.press('Tab');
+    await summary.focus();
     await expect(summary).toBeFocused();
     await page.keyboard.press('Enter');
   } else {

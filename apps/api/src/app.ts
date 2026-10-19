@@ -3,10 +3,12 @@ import fastifyStatic from '@fastify/static';
 import { access, mkdir } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { join } from 'node:path';
+import { registerAuth } from './auth.js';
+import { openDatabase } from './database.js';
 
 export const dataDirectories = ['db', 'staging', 'originals', 'previews', 'backups'] as const;
 
-export async function buildApp(options: { dataRoot: string; webRoot: string; logger?: boolean }) {
+export async function buildApp(options: { dataRoot: string; webRoot: string; logger?: boolean; secureCookies?: boolean }) {
   // Fail startup if storage is unusable; the entire data tree is separate from static assets.
   await Promise.all(dataDirectories.map(async (directory) => {
     const path = join(options.dataRoot, directory);
@@ -18,7 +20,10 @@ export async function buildApp(options: { dataRoot: string; webRoot: string; log
   const app = Fastify({
     logger: options.logger ?? false,
     logController: new LogController({ disableRequestLogging: true }),
+    bodyLimit: 32 * 1024,
   });
+  const database = openDatabase(options.dataRoot);
+  app.addHook('onClose', async () => database.close());
   app.addHook('onSend', async (_request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Referrer-Policy', 'no-referrer');
@@ -28,7 +33,9 @@ export async function buildApp(options: { dataRoot: string; webRoot: string; log
     reply.header('Cache-Control', 'no-store');
     return { status: 'ok', service: 'nami' };
   });
+  await registerAuth(app, database, options.secureCookies ?? false);
   await app.register(fastifyStatic, { root: options.webRoot, dotfiles: 'deny' });
+  app.get('/organizer', async (_request, reply) => reply.sendFile('index.html'));
   // Unknown API/data paths must stay 404, rather than receiving the SPA shell.
   return app;
 }

@@ -5,6 +5,8 @@ services:
     ports:
       - "127.0.0.1:${NAMI_PORT:-3000}:3000"
     user: "${NAMI_UID:-1000}:${NAMI_GID:-1000}"
+    environment:
+      NAMI_SECURE_COOKIES: "${NAMI_SECURE_COOKIES:-false}"
     volumes:
       - type: bind
         source: ${NAMI_DATA_DIR:-../nami-data}

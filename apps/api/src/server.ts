@@ -9,6 +9,7 @@ const app = await buildApp({
   dataRoot: resolve(process.env.NAMI_DATA_DIR ?? '../nami-data'),
   webRoot: fileURLToPath(new URL('../../web/dist/', import.meta.url)),
   logger: true,
+  secureCookies: process.env.NAMI_SECURE_COOKIES === 'true',
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

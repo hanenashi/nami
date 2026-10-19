@@ -1,16 +1,28 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { copy } from './copy.js';
+import { Organizer } from './Organizer.js';
 import './styles.css';
 
-function Welcome() {
+function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="page">
       <header className="masthead">
-        <span className="wordmark">{copy.brand}</span>
+        <a className="wordmark" href="/">{copy.brand}</a>
         <span className="subtitle" lang="cs">{copy.subtitle}</span>
       </header>
-      <main>
+      <main>{children}</main>
+      <footer>
+        <span>{copy.brand} · {copy.motto}</span>
+        <a href="/organizer">Organizer</a>
+      </footer>
+    </div>
+  );
+}
+
+function Welcome() {
+  return (
+    <Shell>
         <section className="welcome" aria-labelledby="welcome-heading">
           <h1 id="welcome-heading">{copy.heading}</h1>
           <p className="introduction">{copy.introduction}</p>
@@ -32,10 +44,12 @@ function Welcome() {
             </div>
           </details>
         </section>
-      </main>
-      <footer>{copy.brand} · {copy.motto}</footer>
-    </div>
+    </Shell>
   );
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode><Welcome /></StrictMode>);
+function App() {
+  return location.pathname === '/organizer' ? <Shell><Organizer /></Shell> : <Welcome />;
+}
+
+createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
