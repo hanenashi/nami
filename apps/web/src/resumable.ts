@@ -37,7 +37,7 @@ export async function cancelResumable(eventId: string, file: File) {
 
 export async function uploadResumable(
   eventId: string, file: File, signal: AbortSignal, onProgress: (bytes: number) => void,
-): Promise<NamiMedia> {
+): Promise<{ media: NamiMedia; duplicate: boolean }> {
   const key = savedKey(eventId, file);
   let location = localStorage.getItem(key);
   if (location && !validLocation(eventId, location)) {
@@ -89,7 +89,7 @@ export async function uploadResumable(
     body: JSON.stringify({ originalName: file.name }), signal,
   });
   if (!finalized.ok) throw await failure(finalized);
-  const body = await finalized.json() as { media: NamiMedia };
+  const body = await finalized.json() as { media: NamiMedia; duplicate: boolean };
   localStorage.removeItem(key);
-  return body.media;
+  return body;
 }

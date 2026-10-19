@@ -405,7 +405,7 @@ test('a contributor can preserve one JPEG while viewer and cross-event writes ar
   const webRoot = join(root, 'web');
   await mkdir(webRoot);
   await writeFile(join(webRoot, 'index.html'), '<!doctype html><title>NAMI fixture</title>');
-  const app = await buildApp({ dataRoot, webRoot });
+  let app = await buildApp({ dataRoot, webRoot });
   t.after(() => app.close());
   const sameOriginHeaders = { host: 'nami.test', origin: 'http://nami.test' };
 
@@ -480,6 +480,12 @@ test('a contributor can preserve one JPEG while viewer and cross-event writes ar
   assert.equal(uploaded.statusCode, 201, uploaded.body);
   const uploadedMedia = uploaded.json().media as { id: string; uploaderName: string };
   assert.equal(uploadedMedia.uploaderName, 'Cousin Sam');
+  const repeated = multipartPhoto(jpeg);
+  const duplicateUpload = await app.inject({ method: 'POST', url: `/api/events/${eventA}/media`,
+    headers: { ...sameOriginHeaders, cookie: contributorCookie, ...repeated.headers }, payload: repeated.payload });
+  assert.equal(duplicateUpload.statusCode, 200);
+  assert.equal(duplicateUpload.json().duplicate, true);
+  assert.equal(duplicateUpload.json().media.id, uploadedMedia.id);
 
   const mediaDatabase = new Database(join(dataRoot, 'db', 'nami.sqlite'), { readonly: true });
   const storedHash = mediaDatabase.prepare('SELECT sha256 FROM media WHERE id = ?').get(uploadedMedia.id) as { sha256: string };
@@ -625,4 +631,16 @@ test('a contributor can preserve one JPEG while viewer and cross-event writes ar
   await assert.rejects(stat(join(dataRoot, 'previews', `${otherId}.jpg`)), { code: 'ENOENT' });
   assert.equal((await app.inject({ url: `/api/events/${eventB}`, headers: organizerHeaders })).statusCode, 404);
   assert.equal((await app.inject({ url: `/api/events/${eventA}`, headers: organizerHeaders })).statusCode, 200);
+
+  await app.close();
+  app = await buildApp({ dataRoot, webRoot });
+  const simultaneousEvent = await createEvent('Simultaneous uploads');
+  const twoUploads = await Promise.all([0, 1].map(() => {
+    const part = multipartPhoto(jpeg);
+    return app.inject({ method: 'POST', url: `/api/events/${simultaneousEvent}/media`,
+      headers: { ...organizerHeaders, ...part.headers }, payload: part.payload });
+  }));
+  assert.deepEqual(twoUploads.map(response => response.statusCode).sort(), [200, 201]);
+  assert.equal((await app.inject({ url: `/api/events/${simultaneousEvent}/media`, headers: organizerHeaders })).json().media.length, 1);
+  assert.equal((await readdir(join(dataRoot, 'originals'))).length, 1);
 });

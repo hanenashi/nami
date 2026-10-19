@@ -291,6 +291,10 @@ to add photos. Keep the service private and preserve live data during deployment
 ### M3 — Preserve, process and index
 - [ ] Signature/size verification and streamed SHA-256.
 - [ ] Immutable originals, exact-byte dedup, event/uploader association.
+  - [x] Exact-byte repeat uploads within one event return its existing media
+    item and discard redundant staged data; first attribution is retained.
+  - [ ] Shared physical blobs and multiple contributor associations across
+    events remain future work.
 - [ ] Metadata extraction, orientation, timestamps/source flag.
 - [ ] Durable job queue, thumbnails/previews and retry/restart logic.
 - [ ] HEIC and video poster test with honest compatibility reporting.

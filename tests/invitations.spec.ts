@@ -60,6 +60,12 @@ test('a contributor joins, shares one JPEG, and loses access when revoked', asyn
   const jpeg = await sharp({
     create: { width: 80, height: 50, channels: 3, background: { r: 34, g: 82, b: 69 } },
   }).jpeg({ quality: 88 }).toBuffer();
+  const jpeg2 = await sharp({
+    create: { width: 80, height: 50, channels: 3, background: { r: 44, g: 94, b: 79 } },
+  }).jpeg({ quality: 88 }).toBuffer();
+  const jpeg3 = await sharp({
+    create: { width: 80, height: 50, channels: 3, background: { r: 54, g: 104, b: 89 } },
+  }).jpeg({ quality: 88 }).toBuffer();
   const fileChooser = guestPage.waitForEvent('filechooser');
   await guestPage.getByLabel('Add photos').click();
   await (await fileChooser).setFiles({
@@ -78,8 +84,8 @@ test('a contributor joins, shares one JPEG, and loses access when revoked', asyn
     } else await route.continue();
   });
   await guestPage.getByLabel('Add photos').setInputFiles([
-    { name: 'batch-one.jpg', mimeType: 'image/jpeg', buffer: jpeg },
-    { name: 'batch-two.jpg', mimeType: 'image/jpeg', buffer: jpeg },
+    { name: 'batch-one.jpg', mimeType: 'image/jpeg', buffer: jpeg2 },
+    { name: 'batch-two.jpg', mimeType: 'image/jpeg', buffer: jpeg3 },
   ]);
   await expect(guestPage.getByText('1 photo needs attention')).toBeVisible();
   expect(newSessions).toBe(1);
@@ -88,6 +94,9 @@ test('a contributor joins, shares one JPEG, and loses access when revoked', asyn
   expect(newSessions).toBe(2);
   await guestPage.unrouteAll({ behavior: 'wait' });
   await expect(guestPage.getByText('3 photos')).toBeVisible();
+  await guestPage.getByLabel('Add photos').setInputFiles({ name: 'again.jpg', mimeType: 'image/jpeg', buffer: jpeg });
+  await expect(guestPage.getByText('1 photo was already in this album.')).toBeVisible();
+  await expect(guestPage.getByRole('button', { name: /Open photo/ })).toHaveCount(3);
   if (testInfo.project.name !== 'desktop-chromium') await guestPage.screenshot({ path: `/tmp/nami-${testInfo.project.name}-album.png`, fullPage: true });
   await guestPage.getByRole('button', { name: /Open photo 1 of 3/ }).click();
   await expect(guestPage.getByRole('dialog', { name: 'Photo 1 of 3' })).toBeVisible();

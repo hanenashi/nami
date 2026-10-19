@@ -105,6 +105,10 @@ export async function publishStagedJpeg(options: {
   const originalPath = join(dataRoot, 'originals', `${mediaId}.jpg`);
   const previewPath = join(dataRoot, 'previews', `${mediaId}.jpg`);
   let committed = false;
+  const existingPhoto = (digest: string) => database.prepare(`${mediaQuery()}
+    WHERE media.event_id = ? AND media.sha256 = ?
+    ORDER BY media.created_at ASC, media.id ASC LIMIT 1
+  `).get(eventId, digest) as MediaRow | undefined;
   try {
     const sizeBytes = (await stat(stagingPath)).size;
     if (sizeBytes === 0) throw new UploadProblem(400, 'That file is empty.');
@@ -122,6 +126,9 @@ export async function publishStagedJpeg(options: {
     const hash = createHash('sha256');
     for await (const chunk of createReadStream(stagingPath)) hash.update(chunk);
     const digest = hash.digest('hex');
+    if (!stillAuthorized()) throw new UploadProblem(403, 'Your access changed before the photo was saved.');
+    const alreadyPresent = existingPhoto(digest);
+    if (alreadyPresent) return { media: serializeMedia(alreadyPresent), duplicate: true };
     // A crash may leave a derived file before the media row is committed.
     // The staged source remains available for a safe, repeatable retry.
     await removeIfPresent(previewStagingPath);
@@ -155,20 +162,26 @@ export async function publishStagedJpeg(options: {
     await removeIfPresent(previewPath);
     await rename(previewStagingPath, previewPath);
     if (!stillAuthorized()) throw new UploadProblem(403, 'Your access changed before the photo was saved.');
-    database.prepare(`
-      INSERT INTO media (
-        id, event_id, uploaded_by, original_name, media_type, size_bytes,
-        sha256, width, height, preview_width, preview_height,
-        preview_size_bytes, created_at
-      ) VALUES (?, ?, ?, ?, 'image/jpeg', ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      mediaId, eventId, actorId, basename(options.originalName.replaceAll('\\', '/') || 'photo.jpg').slice(0, 255),
-      sizeBytes, digest, metadata.width, metadata.height,
-      preview.width, preview.height, preview.size, Date.now(),
-    );
-    committed = true;
-    const row = database.prepare(`${mediaQuery()} WHERE media.id = ?`).get(mediaId) as MediaRow;
-    return serializeMedia(row);
+    const result = database.transaction(() => {
+      // Another request can finish while this one generates its preview.
+      const duplicate = existingPhoto(digest);
+      if (duplicate) return { media: serializeMedia(duplicate), duplicate: true };
+      database.prepare(`
+        INSERT INTO media (
+          id, event_id, uploaded_by, original_name, media_type, size_bytes,
+          sha256, width, height, preview_width, preview_height,
+          preview_size_bytes, created_at
+        ) VALUES (?, ?, ?, ?, 'image/jpeg', ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        mediaId, eventId, actorId, basename(options.originalName.replaceAll('\\', '/') || 'photo.jpg').slice(0, 255),
+        sizeBytes, digest, metadata.width, metadata.height,
+        preview.width, preview.height, preview.size, Date.now(),
+      );
+      const row = database.prepare(`${mediaQuery()} WHERE media.id = ?`).get(mediaId) as MediaRow;
+      return { media: serializeMedia(row), duplicate: false };
+    })();
+    committed = !result.duplicate;
+    return result;
   } finally {
     await removeIfPresent(previewStagingPath);
     if (!committed) {
@@ -257,7 +270,7 @@ export async function registerMedia(
         if (part.file.truncated) throw new UploadProblem(413, 'That JPEG is larger than the 25 MB limit.');
       }
       if (!received) throw new UploadProblem(400, 'Choose one JPEG to upload.');
-      const media = await publishStagedJpeg({
+      const result = await publishStagedJpeg({
         database, dataRoot, mediaId, stagingPath, eventId: request.params.eventId,
         actorId: request.namiActor!.id, originalName,
         stillAuthorized: () => {
@@ -268,7 +281,7 @@ export async function registerMedia(
       });
       committed = true;
       await removeIfPresent(stagingPath).catch(() => {});
-      return reply.code(201).send({ media });
+      return reply.code(result.duplicate ? 200 : 201).send(result);
     } catch (error) {
       if (!committed) await Promise.all([
         removeIfPresent(stagingPath),

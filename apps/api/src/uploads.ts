@@ -174,7 +174,7 @@ export async function registerUploads(app: FastifyInstance, db: NamiDatabase, da
             JOIN actors ON actors.id = media.uploaded_by WHERE media.id = ?`).get(uploadId);
           db.prepare('DELETE FROM upload_sessions WHERE id = ?').run(uploadId);
           await unlink(join(directory, uploadId)).catch(() => {});
-          return reply.code(200).send({ media: serializeMedia(media as Parameters<typeof serializeMedia>[0]) });
+          return reply.code(200).send({ media: serializeMedia(media as Parameters<typeof serializeMedia>[0]), duplicate: false });
         }
         const session = get(uploadId);
         if (!session || session.actor_id !== actorId || session.event_id !== eventId) {
@@ -189,7 +189,7 @@ export async function registerUploads(app: FastifyInstance, db: NamiDatabase, da
         if (size !== expected) return reply.code(409).send({ error: 'Finish uploading before adding this photo.' });
         finalizing.add(uploadId);
         try {
-          const media = await publishStagedJpeg({
+          const result = await publishStagedJpeg({
             database: db, dataRoot, mediaId: uploadId, stagingPath: path,
             eventId, actorId, originalName: request.body.originalName!,
             stillAuthorized: () => {
@@ -201,7 +201,7 @@ export async function registerUploads(app: FastifyInstance, db: NamiDatabase, da
           });
           db.prepare('DELETE FROM upload_sessions WHERE id = ?').run(uploadId);
           await unlink(path).catch(() => {});
-          return reply.code(201).send({ media });
+          return reply.code(result.duplicate ? 200 : 201).send(result);
         } catch (error) {
           if (error instanceof UploadProblem) return reply.code(error.statusCode).send({ error: error.message });
           throw error;

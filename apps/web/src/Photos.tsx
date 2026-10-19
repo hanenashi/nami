@@ -26,6 +26,7 @@ export function EventPhotos({ eventId, role, initialMedia }: {
 }) {
   const [media, setMedia] = useState(initialMedia);
   const [error, setError] = useState('');
+  const [duplicateCount, setDuplicateCount] = useState(0);
   const [batch, setBatch] = useState<BatchItem[]>([]);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [selecting, setSelecting] = useState(false);
@@ -64,7 +65,8 @@ export function EventPhotos({ eventId, role, initialMedia }: {
         try {
           const result = await uploadResumable(eventId, item.file, controller.signal, bytes =>
             updateItem(item.id, { bytes, status: bytes === item.file.size ? 'processing' : 'uploading' }));
-          setMedia(current => current.some(photo => photo.id === result.id) ? current : [result, ...current]);
+          if (result.duplicate) setDuplicateCount(current => current + 1);
+          setMedia(current => current.some(photo => photo.id === result.media.id) ? current : [result.media, ...current]);
           updateItem(item.id, { status: 'ready', bytes: item.file.size });
         } catch (reason) {
           if (cancelled.current.has(item.id)) {
@@ -101,6 +103,7 @@ export function EventPhotos({ eventId, role, initialMedia }: {
     const accepted = files.filter(file => /\.jpe?g$/i.test(file.name) && file.size > 0 && file.size <= maxPhotoBytes);
     if (accepted.length !== files.length) setError('Choose JPEG photos up to 25 MB each.');
     else setError('');
+    setDuplicateCount(0);
     const selected = new Set(accepted.map(file => `${file.name}:${file.size}:${file.lastModified}`));
     batchRef.current = [
       ...batchRef.current.filter(item => item.status !== 'ready' && item.status !== 'cancelled' &&
@@ -189,6 +192,7 @@ export function EventPhotos({ eventId, role, initialMedia }: {
         </div>
       </div>
       {error ? <p className="form-error album-error" role="alert">{error}</p> : null}
+      {duplicateCount > 0 ? <p className="duplicate-notice" role="status">{duplicateCount} {duplicateCount === 1 ? 'photo was' : 'photos were'} already in this album.</p> : null}
       {selecting ? <div className="photo-selection" aria-label="Photo selection">
         <span>{selected.size} selected</span>
         <div className="photo-selection-actions">

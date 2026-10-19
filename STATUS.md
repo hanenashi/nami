@@ -328,3 +328,39 @@ only accepted format now.
   2 events, 4 access rows, 3 invitations, 25 media rows and 1 unfinished upload
   session. Every original, preview and staged-upload file matches the backup
   manifest. No live deletion endpoint was called.
+
+## Same-event JPEG duplicates
+
+- The Pixel's current organizer tab showed 12 photo tiles. SQLite confirmed
+  six exact-byte SHA-256 pairs in that event, each pair from the same contributor
+  about 20 seconds apart after a repeated batch selection. These are duplicate
+  uploads, not a gallery rendering fault.
+- The JPEG publisher now checks validated bytes against media in the same event
+  before processing, and checks again inside the final database transaction to
+  handle overlapping requests in the single API process. A repeat returns the
+  existing photo and discards its redundant staged file. The browser reports
+  the count already present. No hash/existence information crosses event access
+  boundaries. First contributor attribution remains on the shared tile.
+- API tests cover direct, simultaneous and Tus repeat uploads, preserved
+  originals, no extra media/files, and the same bytes in a different event.
+  Browser tests cover the
+  notice and three distinct JPEGs across desktop Chromium and WebKit iPad/iPhone.
+  `npm run check` passed 8 API tests; `npm run test:e2e` passed 12 browser tests.
+- Physical blob sharing between events and multiple contributor associations
+  are still future work; this increment prevents same-event duplicate tiles.
+- Before cleaning the live album, the container was stopped and a full snapshot
+  was verified at `../nami-backups/pre-dedupe-20261019-2201` with a SHA-256
+  manifest. A disposable restore passed app health, SQLite integrity and
+  foreign-key checks with all 12 original media rows. The private snapshot
+  also records exactly which six redundant rows were removed.
+- Each pair's original file was rehashed against its database SHA-256 and its
+  contributor ID checked equal before keeping the older row and removing the
+  later row and its private original/preview files. The live album now has six
+  media rows, six originals and six previews; all remaining original hashes
+  match SQLite, and integrity/foreign-key checks pass. Actors, sessions,
+  event, access and invitations retain their pre-cleanup counts (3, 6, 1, 1,
+  0); there were no unfinished uploads.
+- The rebuilt container is healthy on `127.0.0.1:3000` only. The Pixel Kiwi
+  organizer tab was refreshed over wireless ADB and showed six photos and six
+  tiles without an alert. A physical repeat-upload test of the new behavior
+  remains for the next hands-on check.

@@ -169,6 +169,7 @@ button:disabled { cursor: wait; opacity: .65; }
 .event-settings summary { min-height: 56px; color: #62746c; font-size: 15px; }
 .event-settings .quiet-danger { margin: 8px 0 18px; }
 .album-error { margin: 0 0 12px; }
+.duplicate-notice { margin: 0 0 12px; color: #45675a; font-size: 14px; }
 .event-album .photo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
 .photo-grid li { min-width: 0; position: relative; }
 .photo-tile { display: block; width: 100%; aspect-ratio: 1; border: 0; padding: 0; overflow: hidden; background: #e8efec; cursor: zoom-in; }

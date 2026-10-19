@@ -51,9 +51,11 @@ test('organizer can select photos and double-confirm event removal', async ({ pa
   await page.getByRole('link', { name: title }).click();
   const jpeg = await sharp({ create: { width: 80, height: 60, channels: 3,
     background: { r: 38, g: 84, b: 70 } } }).jpeg().toBuffer();
+  const secondJpeg = await sharp({ create: { width: 80, height: 60, channels: 3,
+    background: { r: 58, g: 104, b: 90 } } }).jpeg().toBuffer();
   await page.getByLabel('Add photos').setInputFiles([
     { name: 'one.jpg', mimeType: 'image/jpeg', buffer: jpeg },
-    { name: 'two.jpg', mimeType: 'image/jpeg', buffer: jpeg },
+    { name: 'two.jpg', mimeType: 'image/jpeg', buffer: secondJpeg },
   ]);
   await expect(page.getByRole('button', { name: /Open photo/ })).toHaveCount(2);
   await page.getByRole('button', { name: 'Select', exact: true }).click();

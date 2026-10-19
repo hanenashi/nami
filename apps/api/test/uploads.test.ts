@@ -161,18 +161,32 @@ test('Tus ownership, limits, cancellation and byte-exact resume across API resta
   assert.deepEqual(await readdir(join(dataRoot, 'uploads')), [freshId]);
   assert.equal((await stat(join(dataRoot, 'originals', `${jpegId}.jpg`))).size, jpeg.length);
   assert.equal((await call(freshResponse.headers.get('location')!, 'DELETE')).status, 204);
+  const repeatCreate = await create(jpeg.length);
+  const repeatPath = repeatCreate.headers.get('location')!;
+  const repeatId = repeatPath.split('/').at(-1)!;
+  assert.equal((await fetch(`${base}${repeatPath}`, { method: 'PATCH',
+    headers: { origin: base, cookie: cookies[1], 'Tus-Resumable': '1.0.0',
+      'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': '0' }, body: jpeg })).status, 204);
+  const repeatResult = await finalize(repeatPath);
+  assert.equal(repeatResult.status, 200);
+  assert.equal((await repeatResult.json()).duplicate, true);
+  assert.equal((db.prepare('SELECT count(*) AS count FROM media').get() as { count: number }).count, 1);
+  await assert.rejects(stat(join(dataRoot, 'originals', `${repeatId}.jpg`)), { code: 'ENOENT' });
+  assert.deepEqual(await readdir(join(dataRoot, 'uploads')), []);
   // Repeated batches must release each slot and publish every original.
   for (let i = 0; i < 100; i++) {
-    const response = await create(jpeg.length);
+    const uniqueJpeg = await sharp({ create: { width: 10 + i, height: 8, channels: 3,
+      background: { r: 80, g: 180, b: 110 } } }).jpeg().toBuffer();
+    const response = await create(uniqueJpeg.length);
     assert.equal(response.status, 201);
     const path = response.headers.get('location')!;
     const id = path.split('/').at(-1)!;
     const sent = await fetch(`${base}${path}`, { method: 'PATCH',
       headers: { origin: base, cookie: cookies[1], 'Tus-Resumable': '1.0.0',
-        'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': '0' }, body: jpeg });
+      'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': '0' }, body: uniqueJpeg });
     assert.equal(sent.status, 204);
     assert.equal((await finalize(path)).status, 201);
-    assert.deepEqual(await readFile(join(dataRoot, 'originals', `${id}.jpg`)), jpeg);
+    assert.deepEqual(await readFile(join(dataRoot, 'originals', `${id}.jpg`)), uniqueJpeg);
   }
   assert.equal((db.prepare('SELECT count(*) AS count FROM media').get() as { count: number }).count, 101);
   assert.deepEqual(await readdir(join(dataRoot, 'uploads')), []);

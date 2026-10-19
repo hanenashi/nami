@@ -20,6 +20,11 @@ interruption when the same files are selected again. Other photo and video
 formats come later. NAMI is not ready for real family photographs or internet
 traffic yet.
 
+If the exact same JPEG is selected again for the same event, NAMI keeps the
+existing tile and original rather than adding another copy. The album reports
+how many selected files were already present. The first contributor attribution
+is retained; visually similar photos with different bytes remain separate.
+
 In an organizer album, **Select** switches thumbnails into selection mode.
 Use **All**, **None**, or **Reverse**, then confirm **Remove selected**. Removing
 photos deletes their original and preview files. **Event settings** contains
