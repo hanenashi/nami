@@ -1,5 +1,15 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { getAuthStatus, loginOrganizer, logoutOrganizer, setupOrganizer, type AuthStatus } from './api.js';
+import {
+  createEvent,
+  getAuthStatus,
+  getEvent,
+  getEvents,
+  loginOrganizer,
+  logoutOrganizer,
+  setupOrganizer,
+  type AuthStatus,
+  type NamiEvent,
+} from './api.js';
 
 type SubmitState = 'idle' | 'working';
 
@@ -109,9 +119,88 @@ function Login({ onComplete }: { onComplete: (status: AuthStatus) => void }) {
   );
 }
 
+function formatCalendarDate(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(new Date(year, month - 1, day));
+}
+
+function formatEventDates(event: NamiEvent) {
+  const start = formatCalendarDate(event.startDate);
+  if (!event.endDate || event.endDate === event.startDate) return start;
+  return `${start} – ${formatCalendarDate(event.endDate)}`;
+}
+
+function EventForm({ onCreated }: { onCreated: (event: NamiEvent) => void }) {
+  const [submitState, setSubmitState] = useState<SubmitState>('idle');
+  const [error, setError] = useState('');
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    setSubmitState('working');
+    const form = new FormData(event.currentTarget);
+    const endDate = String(form.get('endDate') ?? '');
+    try {
+      const result = await createEvent({
+        title: String(form.get('title') ?? ''),
+        description: String(form.get('description') ?? ''),
+        startDate: String(form.get('startDate') ?? ''),
+        endDate: endDate || undefined,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      onCreated(result.event);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Couldn’t create the event. Please try again.');
+      setSubmitState('idle');
+    }
+  }
+
+  return (
+    <section className="create-event" aria-labelledby="create-event-heading">
+      <h2 id="create-event-heading">Create an event</h2>
+      <form className="event-form" onSubmit={submit}>
+        <label className="field">
+          <span>Event name</span>
+          <input name="title" type="text" autoComplete="off" maxLength={120} required autoFocus />
+        </label>
+        <div className="date-fields">
+          <label className="field">
+            <span>Date</span>
+            <input name="startDate" type="date" required />
+          </label>
+          <label className="field">
+            <span>End date <small>(optional)</small></span>
+            <input name="endDate" type="date" />
+          </label>
+        </div>
+        <label className="field">
+          <span>Description <small>(optional)</small></span>
+          <textarea name="description" rows={4} maxLength={2000} />
+        </label>
+        {error ? <p className="form-error" role="alert">{error}</p> : null}
+        <button className="primary-button" type="submit" disabled={submitState === 'working'}>
+          {submitState === 'working' ? 'Creating…' : 'Create event'}
+        </button>
+      </form>
+    </section>
+  );
+}
+
 function OrganizerHome({ displayName, onLogout }: { displayName: string; onLogout: () => void }) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
+  const [events, setEvents] = useState<NamiEvent[] | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+    getEvents().then(result => {
+      if (!ignore) setEvents(result.events);
+    }).catch(reason => {
+      if (!ignore) setError(reason instanceof Error ? reason.message : 'Couldn’t load your events.');
+    });
+    return () => { ignore = true; };
+  }, []);
 
   async function logout() {
     setWorking(true);
@@ -126,15 +215,79 @@ function OrganizerHome({ displayName, onLogout }: { displayName: string; onLogou
   }
 
   return (
-    <section className="auth-panel" aria-labelledby="organizer-heading">
+    <section className="organizer-panel" aria-labelledby="organizer-heading">
       <p className="section-label">Organizer</p>
       <h1 id="organizer-heading">Hello, {displayName}.</h1>
-      <p className="auth-introduction">Your family events will live here. Creating the first one comes next.</p>
+      <p className="auth-introduction">Keep each gathering and its shared memories together.</p>
       {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {events ? (
+        <>
+          {events.length > 0 ? (
+            <section className="events" aria-labelledby="events-heading">
+              <div className="events-heading">
+                <h2 id="events-heading">Your events</h2>
+                {!showCreate ? <button className="secondary-button" type="button" onClick={() => setShowCreate(true)}>New event</button> : null}
+              </div>
+              <ul className="event-list">
+                {events.map(event => (
+                  <li key={event.id}>
+                    <a className="event-card" href={`/organizer/events/${event.id}`}>
+                      <strong>{event.title}</strong>
+                      <span>{formatEventDates(event)}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+          {showCreate || events.length === 0 ? (
+            <EventForm onCreated={event => { location.href = `/organizer/events/${event.id}`; }} />
+          ) : null}
+        </>
+      ) : <p className="loading-message">Loading your events…</p>}
       <button className="text-button" type="button" onClick={logout} disabled={working}>
         {working ? 'Signing out…' : 'Sign out'}
       </button>
     </section>
+  );
+}
+
+function EventDetail({ eventId }: { eventId: string }) {
+  const [event, setEvent] = useState<NamiEvent | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let ignore = false;
+    getEvent(eventId).then(result => {
+      if (!ignore) setEvent(result.event);
+    }).catch(reason => {
+      if (!ignore) setError(reason instanceof Error ? reason.message : 'Couldn’t load this event.');
+    });
+    return () => { ignore = true; };
+  }, [eventId]);
+
+  if (error) {
+    return (
+      <section className="event-detail">
+        <a className="back-link" href="/organizer">← Your events</a>
+        <p className="form-error" role="alert">{error}</p>
+      </section>
+    );
+  }
+  if (!event) return <p className="page-message">Opening event…</p>;
+
+  return (
+    <article className="event-detail">
+      <a className="back-link" href="/organizer">← Your events</a>
+      <p className="section-label">Event</p>
+      <h1>{event.title}</h1>
+      <p className="event-date">{formatEventDates(event)}</p>
+      {event.description ? <p className="event-description">{event.description}</p> : null}
+      <section className="event-coming-next" aria-labelledby="sharing-heading">
+        <h2 id="sharing-heading">Share it together</h2>
+        <p>Invitations and photos will appear here.</p>
+      </section>
+    </article>
   );
 }
 
@@ -156,6 +309,8 @@ export function Organizer() {
   if (!status) return <p className="page-message">Opening NAMI…</p>;
   if (status.setupRequired) return <Setup onComplete={setStatus} />;
   if (status.authenticated && status.organizer) {
+    const eventMatch = /^\/organizer\/events\/([^/]+)$/.exec(location.pathname);
+    if (eventMatch) return <EventDetail eventId={eventMatch[1]} />;
     return <OrganizerHome displayName={status.organizer.displayName} onLogout={() => setStatus({ setupRequired: false, authenticated: false, organizer: null })} />;
   }
   return <Login onComplete={setStatus} />;

@@ -128,3 +128,81 @@ test('organizer setup, login and logout persist safely', async (t) => {
   assert.equal(login.statusCode, 200);
   assert.equal(login.json().organizer.displayName, 'Organizer');
 });
+
+test('organizer event access is enforced and events persist', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'nami-events-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const dataRoot = join(root, 'data');
+  const webRoot = join(root, 'web');
+  await mkdir(webRoot);
+  await writeFile(join(webRoot, 'index.html'), '<!doctype html><title>NAMI fixture</title>');
+  let app = await buildApp({ dataRoot, webRoot });
+  const sameOriginHeaders = { host: 'nami.test', origin: 'http://nami.test' };
+
+  assert.equal((await app.inject('/api/events')).statusCode, 401);
+  const setup = await app.inject({
+    method: 'POST', url: '/api/auth/setup', headers: sameOriginHeaders,
+    payload: { displayName: 'Organizer', password: 'a long test passphrase' },
+  });
+  const sessionCookie = String(setup.headers['set-cookie']).split(';', 1)[0];
+  const authenticatedHeaders = { ...sameOriginHeaders, cookie: sessionCookie };
+
+  const crossOrigin = await app.inject({
+    method: 'POST', url: '/api/events',
+    headers: { host: 'nami.test', origin: 'http://elsewhere.test', cookie: sessionCookie },
+    payload: { title: 'Private gathering', startDate: '2026-10-19' },
+  });
+  assert.equal(crossOrigin.statusCode, 403);
+  const impossibleDate = await app.inject({
+    method: 'POST', url: '/api/events', headers: authenticatedHeaders,
+    payload: { title: 'Private gathering', startDate: '2026-02-30' },
+  });
+  assert.equal(impossibleDate.statusCode, 400);
+  const reversedDates = await app.inject({
+    method: 'POST', url: '/api/events', headers: authenticatedHeaders,
+    payload: { title: 'Private gathering', startDate: '2026-10-20', endDate: '2026-10-19' },
+  });
+  assert.equal(reversedDates.statusCode, 400);
+
+  const created = await app.inject({
+    method: 'POST', url: '/api/events', headers: authenticatedHeaders,
+    payload: {
+      title: '  Autumn lunch  ',
+      description: '  Soup, stories, and photographs.  ',
+      startDate: '2026-10-19',
+      endDate: '2026-10-20',
+      timezone: 'Asia/Tokyo',
+    },
+  });
+  assert.equal(created.statusCode, 201);
+  assert.equal(created.json().event.title, 'Autumn lunch');
+  assert.equal(created.json().event.description, 'Soup, stories, and photographs.');
+  const eventId = created.json().event.id as string;
+
+  const list = await app.inject({ url: '/api/events', headers: { cookie: sessionCookie } });
+  assert.equal(list.statusCode, 200);
+  assert.equal(list.headers['cache-control'], 'no-store');
+  assert.deepEqual(list.json().events.map((event: { id: string }) => event.id), [eventId]);
+  const detail = await app.inject({ url: `/api/events/${eventId}`, headers: { cookie: sessionCookie } });
+  assert.equal(detail.statusCode, 200);
+  assert.equal(detail.json().event.timezone, 'Asia/Tokyo');
+  assert.equal((await app.inject({ url: '/api/events/not-a-real-event', headers: { cookie: sessionCookie } })).statusCode, 404);
+
+  const database = new Database(join(dataRoot, 'db', 'nami.sqlite'), { readonly: true });
+  const access = database.prepare(`
+    SELECT events.owner_id, event_access.actor_id, event_access.role
+    FROM events JOIN event_access ON event_access.event_id = events.id
+    WHERE events.id = ?
+  `).get(eventId) as { owner_id: string; actor_id: string; role: string };
+  database.close();
+  assert.equal(access.owner_id, access.actor_id);
+  assert.equal(access.role, 'organizer');
+
+  await app.close();
+  app = await buildApp({ dataRoot, webRoot });
+  t.after(() => app.close());
+  assert.equal((await app.inject('/api/events')).statusCode, 401);
+  const persisted = await app.inject({ url: `/api/events/${eventId}`, headers: { cookie: sessionCookie } });
+  assert.equal(persisted.statusCode, 200);
+  assert.equal(persisted.json().event.title, 'Autumn lunch');
+});

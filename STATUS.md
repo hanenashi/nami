@@ -1,6 +1,7 @@
 # NAMI status
 
-2026-10-19 — M0 complete. M1 organizer access complete; private events next.
+2026-10-19 — M0 complete. M1 organizer access and private events complete;
+invitations next.
 
 ## Working locally
 
@@ -14,11 +15,13 @@
   seven-day session and sign out at `/organizer`.
 - Scrypt passphrase hashing, hashed session tokens, HttpOnly SameSite cookies,
   same-origin checks and basic login/setup throttling.
+- Organizer-only event creation, event list and event details with a small
+  responsive form, persisted ownership and explicit event access records.
 
 ## Verified
 
-- `npm run check`: lint, typecheck, production builds and 3 API tests passed.
-- `npm run test:e2e` against the local production build: 6 tests passed across
+- `npm run check`: lint, typecheck, production builds and 4 API tests passed.
+- `npm run test:e2e` against the local production build: 9 tests passed across
   Chromium desktop and WebKit iPad/iPhone profiles.
 - Health response, page title/content, keyboard and touch disclosure open/close,
   no application console errors or horizontal overflow.
@@ -52,6 +55,17 @@
   Its database directory and file were mode `0700` and `0600`, respectively.
 - Beechan's account is in the `docker` group. New login sessions can run Docker
   without `sudo`; the existing Codex session was verified with `sg docker`.
+- Event API checks reject missing sessions, cross-origin creation, invalid dates
+  and unknown IDs; ownership/access rows and event details survive restart.
+- The event list, creation form and details flow passed desktop, iPad and iPhone
+  browser checks without console errors or horizontal overflow. Their rendered
+  layouts were also inspected at 1440×1000, 810×1080 and 390×664 CSS pixels.
+- The event Docker image passed all 9 browser tests with disposable data. Three
+  created events remained accessible after forced container recreation, with
+  the database directory and file still mode `0700` and `0600`.
+- Beechan's live container was rebuilt on the persistent data mount after a
+  mode-`0600` SQLite snapshot. The organizer record was unchanged, the new empty
+  event tables were added, and the service remains healthy and loopback-only.
 
 ## Fixes during verification
 
@@ -65,11 +79,11 @@
 
 ## Not verified / not built
 
-No events, invitations, media ingestion, HEIC processing, gallery, backups,
-public deployment or real family photos yet. No physical iPad/iPhone test yet.
+No invitations, media ingestion, HEIC processing, gallery, automated backups,
+public deployment or real family photos yet. No physical iPad/iPhone event-flow
+test yet.
 
 ## Next task
 
-Add **create/list event and event details** for the signed-in organizer, with
-authorization enforced in the API. Keep the first event form small. Invitations
-come in the following slice.
+Add **viewer/contributor invitations** with hashed secrets, optional expiry,
+redemption into an event-scoped guest session, and organizer revocation.

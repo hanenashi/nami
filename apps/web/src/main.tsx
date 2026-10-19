@@ -49,7 +49,9 @@ function Welcome() {
 }
 
 function App() {
-  return location.pathname === '/organizer' ? <Shell><Organizer /></Shell> : <Welcome />;
+  return location.pathname === '/organizer' || location.pathname.startsWith('/organizer/events/')
+    ? <Shell><Organizer /></Shell>
+    : <Welcome />;
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);

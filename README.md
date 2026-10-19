@@ -12,8 +12,9 @@ one gathering. The first testers use an iPad and iPhone; simple screens and
 Safari compatibility come first.
 
 Current milestone: **M1, private events and invitations**. Local organizer setup,
-login and logout work. Events, invitations, uploads and galleries do not exist
-yet. This is not ready to accept family photographs or internet traffic.
+login, event creation and event details work. Invitations, uploads and galleries
+do not exist yet. This is not ready to accept family photographs or internet
+traffic.
 
 ## Start on Beechan
 
@@ -122,8 +123,9 @@ npm run test:e2e
 `check` runs ESLint, TypeScript checking, both production builds, and API tests.
 Browser tests start a temporary server on `127.0.0.1:3100` with disposable data,
 then stop it and remove that data. They cover Chromium desktop and WebKit with
-iPad/iPhone device settings, including organizer setup, logout and repeat login.
-WebKit emulation is not a physical Safari test.
+iPad/iPhone device settings, including organizer setup, logout, repeat login,
+and creating and reopening an event. WebKit emulation is not a physical Safari
+test.
 Some Linux hosts need Playwright's system libraries; use
 `sudo npx playwright install-deps chromium webkit` when the browser installer
 reports missing dependencies. Test results go to

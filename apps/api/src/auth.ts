@@ -4,16 +4,18 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import type { NamiDatabase } from './database.js';
 
-const COOKIE_NAME = 'nami_session';
+export const COOKIE_NAME = 'nami_session';
 const SESSION_SECONDS = 60 * 60 * 24 * 7;
 const PASSWORD_MIN_LENGTH = 12;
 const SCRYPT_N = 32_768;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const SCRYPT_KEY_LENGTH = 64;
+const SETUP_ATTEMPTS_PER_MINUTE = 5;
+const LOGIN_ATTEMPTS_PER_MINUTE = 10;
 
 type Organizer = { id: string; display_name: string; password_hash: string };
-type SessionActor = { id: string; display_name: string };
+export type SessionActor = { id: string; kind: 'organizer'; display_name: string };
 type SetupBody = { displayName: string; password: string };
 type LoginBody = { password: string };
 
@@ -72,12 +74,12 @@ function findOrganizer(database: NamiDatabase) {
   return database.prepare("SELECT id, display_name, password_hash FROM actors WHERE kind = 'organizer'").get() as Organizer | undefined;
 }
 
-function findSessionActor(database: NamiDatabase, token: string | undefined) {
+export function findSessionActor(database: NamiDatabase, token: string | undefined) {
   if (!token) return undefined;
   const now = Date.now();
   database.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now);
   return database.prepare(`
-    SELECT actors.id, actors.display_name
+    SELECT actors.id, actors.kind, actors.display_name
     FROM sessions JOIN actors ON actors.id = sessions.actor_id
     WHERE sessions.token_hash = ? AND sessions.expires_at > ?
   `).get(hashToken(token), now) as SessionActor | undefined;
@@ -98,7 +100,7 @@ function setSession(database: NamiDatabase, reply: FastifyReply, actorId: string
   });
 }
 
-function requireSameOrigin(secureCookies: boolean) {
+export function requireSameOrigin(secureCookies: boolean) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const origin = request.headers.origin;
     const host = request.headers.host;
@@ -107,6 +109,23 @@ function requireSameOrigin(secureCookies: boolean) {
       return reply.code(403).send({ error: 'This request did not come from NAMI.' });
     }
   };
+}
+
+export function requireOrganizer(database: NamiDatabase) {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const actor = findSessionActor(database, request.cookies[COOKIE_NAME]);
+    if (!actor || actor.kind !== 'organizer') {
+      reply.header('Cache-Control', 'no-store');
+      return reply.code(401).send({ error: 'Please sign in as the organizer.' });
+    }
+    request.namiActor = actor;
+  };
+}
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    namiActor?: SessionActor;
+  }
 }
 
 export async function registerAuth(app: FastifyInstance, database: NamiDatabase, secureCookies: boolean) {
@@ -128,7 +147,7 @@ export async function registerAuth(app: FastifyInstance, database: NamiDatabase,
   app.post<{ Body: SetupBody }>('/api/auth/setup', {
     schema: { body: setupBodySchema },
     preHandler: sameOrigin,
-    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    config: { rateLimit: { max: SETUP_ATTEMPTS_PER_MINUTE, timeWindow: '1 minute', groupId: 'organizer-setup' } },
   }, async (request, reply) => {
     if (findOrganizer(database)) return reply.code(409).send({ error: 'NAMI has already been set up.' });
     const displayName = request.body.displayName.trim();
@@ -151,7 +170,7 @@ export async function registerAuth(app: FastifyInstance, database: NamiDatabase,
   app.post<{ Body: LoginBody }>('/api/auth/login', {
     schema: { body: authBodySchema },
     preHandler: sameOrigin,
-    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    config: { rateLimit: { max: LOGIN_ATTEMPTS_PER_MINUTE, timeWindow: '1 minute', groupId: 'organizer-login' } },
   }, async (request, reply) => {
     const organizer = findOrganizer(database);
     if (!organizer) return reply.code(409).send({ error: 'NAMI still needs to be set up.' });

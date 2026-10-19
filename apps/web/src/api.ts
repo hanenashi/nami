@@ -9,6 +9,17 @@ type AuthResult = {
   organizer: { displayName: string };
 };
 
+export type NamiEvent = {
+  id: string;
+  title: string;
+  description: string;
+  startDate: string;
+  endDate: string | null;
+  timezone: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
 async function readJson<T extends object>(response: Response): Promise<T> {
   const body = await response.json() as T | { error?: string };
   if (!response.ok) {
@@ -40,4 +51,26 @@ export async function loginOrganizer(password: string) {
 export async function logoutOrganizer() {
   const response = await fetch('/api/auth/logout', { method: 'POST' });
   if (!response.ok) throw new Error('Couldn’t sign out. Please try again.');
+}
+
+export async function getEvents() {
+  return readJson<{ events: NamiEvent[] }>(await fetch('/api/events', { cache: 'no-store' }));
+}
+
+export async function getEvent(eventId: string) {
+  return readJson<{ event: NamiEvent }>(await fetch(`/api/events/${encodeURIComponent(eventId)}`, { cache: 'no-store' }));
+}
+
+export async function createEvent(input: {
+  title: string;
+  description: string;
+  startDate: string;
+  endDate?: string;
+  timezone?: string;
+}) {
+  return readJson<{ event: NamiEvent }>(await fetch('/api/events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  }));
 }

@@ -20,6 +20,8 @@ test('organizer can complete first setup, sign out, and sign back in', async ({ 
       page.getByRole('alert').waitFor().then(() => 'conflict'),
     ]);
     if (outcome === 'conflict') {
+      // Another browser profile won the intentional one-organizer setup race.
+      errors.length = 0;
       await page.reload();
       await expect(page.locator('h1')).toBeVisible();
     }
