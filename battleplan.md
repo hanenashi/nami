@@ -255,8 +255,9 @@ Backup design must coordinate the database snapshot with original files and GC.
 - [x] Initial Tus transport to persistent staging, owner/event permission checks on create/HEAD/PATCH/DELETE; dropped connection and API restart tested.
 - [x] Retryable JPEG finalization into the verified original/preview/gallery path; transport completion alone is not Ready.
 - [x] Pause/retry/resume, cancellation and browser reselect recovery for JPEG files.
-- [ ] File size/type/quota/staging cleanup enforcement and ledger.
-- [ ] Test interrupted network, API restart and repeated batches.
+- [ ] File size/type/quota enforcement and complete upload ledger; seven-day idle transport pruning is implemented.
+- [x] Test dropped network, API restart and 100 sequential backend JPEG uploads/finalizations.
+- [ ] Test 100-file browser queue and long-running mobile behavior.
 
 **Exit:** 100 files upload with visible accurate statuses and recoverable interruptions.
 

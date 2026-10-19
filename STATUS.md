@@ -162,8 +162,7 @@ cloud dependencies or broad abstractions.
 
 ## Next task
 
-Continue M2 with abandoned-session cleanup, quota/ledger improvements and
-100-file interrupted-batch testing. JPEG finalization and a simple sequential
+Continue M2 with quota/ledger improvements and browser interruption and large-batch testing. JPEG finalization and a simple sequential
 browser queue are implemented; HEIC/video work remains later. Probe HEIC support in the actual image early;
 JPEG remains the only accepted type until a decoder is verified.
 
@@ -179,8 +178,9 @@ JPEG remains the only accepted type until a decoder is verified.
   oversize creation and session allocation limits.
 - Completed staged JPEGs now enter the verified original/preview/gallery path.
   A browser queue shows per-file and total progress, pause/retry/cancel and
-  resumes on reselect after a reload. No expiry/background job processing or
-  orphan reconciliation yet.
+  resumes on reselect after a reload. Idle sessions expire after seven days
+  through startup/hourly pruning; orphaned transport files get one hour of
+  grace. No background job processing or full orphan reconciliation yet.
 
 ## Latest deployment and recovery check
 
@@ -212,3 +212,16 @@ JPEG remains the only accepted type until a decoder is verified.
   the snapshot (2 actors, 3 sessions, 1 event, 2 access records, 1 invitation,
   2 photos); original and preview hashes match. The new image is healthy and
   still bound to `127.0.0.1:3000`.
+
+## Upload retention increment
+
+- Expired transport sessions are removed after seven idle days on startup and
+  hourly. A live HEAD/PATCH/DELETE or finalization is excluded from pruning.
+  Unreferenced UUID-named upload files are removed after one hour.
+- API tests use aged session/file fixtures to check retained fresh files,
+  protected active work, stale sessions, orphan removal and preserved photos.
+
+- A real HTTP API test uploaded and finalized 100 more JPEG sessions in one
+  sequence, checked each original byte-for-byte, and left no staging sessions.
+  This checks backend throughput and slot reuse; 100-file browser interaction
+  and long-running mobile behavior still need testing.

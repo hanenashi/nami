@@ -3,12 +3,13 @@ import { request as httpRequest } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 import { test } from 'node:test';
 import { randomUUID, createHash } from 'node:crypto';
-import { mkdtemp, mkdir, writeFile, readFile, stat, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, stat, readdir, rm, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import sharp from 'sharp';
 import { buildApp } from '../src/app.js';
+import { pruneUploads } from '../src/uploads.js';
 
 test('Tus ownership, limits, cancellation and byte-exact resume across API restart', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'nami-tus-'));
@@ -142,5 +143,38 @@ test('Tus ownership, limits, cancellation and byte-exact resume across API resta
     { 'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': '0' }, 'hello world')).status, 204);
   assert.equal((await finalize(invalidLocation)).status, 415);
   assert.equal((await call(invalidLocation, 'DELETE')).status, 204);
+  const staleResponse = await create();
+  const staleId = staleResponse.headers.get('location')!.split('/').at(-1)!;
+  const freshResponse = await create();
+  const freshId = freshResponse.headers.get('location')!.split('/').at(-1)!;
+  const staleRecord = db.prepare('SELECT metadata FROM upload_sessions WHERE id = ?').get(staleId) as { metadata: string };
+  const old = Date.now() - 8 * 24 * 60 * 60 * 1000;
+  db.prepare('UPDATE upload_sessions SET metadata = ? WHERE id = ?')
+    .run(JSON.stringify({ ...JSON.parse(staleRecord.metadata), creation_date: new Date(old).toISOString() }), staleId);
+  await utimes(join(dataRoot, 'uploads', staleId), old / 1000, old / 1000);
+  const orphanId = randomUUID();
+  await writeFile(join(dataRoot, 'uploads', orphanId), 'orphan');
+  await utimes(join(dataRoot, 'uploads', orphanId), old / 1000, old / 1000);
+  assert.equal(await pruneUploads(db, join(dataRoot, 'uploads'), Date.now(), new Set([staleId])), 1);
+  assert.equal((await readdir(join(dataRoot, 'uploads'))).length, 2);
+  assert.equal(await pruneUploads(db, join(dataRoot, 'uploads')), 1);
+  assert.deepEqual(await readdir(join(dataRoot, 'uploads')), [freshId]);
+  assert.equal((await stat(join(dataRoot, 'originals', `${jpegId}.jpg`))).size, jpeg.length);
+  assert.equal((await call(freshResponse.headers.get('location')!, 'DELETE')).status, 204);
+  // Repeated batches must release each slot and publish every original.
+  for (let i = 0; i < 100; i++) {
+    const response = await create(jpeg.length);
+    assert.equal(response.status, 201);
+    const path = response.headers.get('location')!;
+    const id = path.split('/').at(-1)!;
+    const sent = await fetch(`${base}${path}`, { method: 'PATCH',
+      headers: { origin: base, cookie: cookies[1], 'Tus-Resumable': '1.0.0',
+        'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': '0' }, body: jpeg });
+    assert.equal(sent.status, 204);
+    assert.equal((await finalize(path)).status, 201);
+    assert.deepEqual(await readFile(join(dataRoot, 'originals', `${id}.jpg`)), jpeg);
+  }
+  assert.equal((db.prepare('SELECT count(*) AS count FROM media').get() as { count: number }).count, 101);
+  assert.deepEqual(await readdir(join(dataRoot, 'uploads')), []);
   assert.deepEqual(db.pragma('foreign_key_check'), []);
 });

@@ -2,7 +2,7 @@ import { Server, Upload } from '@tus/server';
 import { FileStore, type Configstore } from '@tus/file-store';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
-import { mkdir, open, stat, unlink } from 'node:fs/promises';
+import { mkdir, open, readdir, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { COOKIE_NAME, findSessionActor, requireActor, requireSameOrigin } from './auth.js';
 import { publishStagedJpeg, serializeMedia, UploadProblem } from './media.js';
@@ -10,10 +10,45 @@ import type { NamiDatabase } from './database.js';
 
 const MAX_BYTES = 25 * 1024 * 1024;
 const MAX_SESSIONS = 10;
+const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const ORPHAN_GRACE_MS = 60 * 60 * 1000;
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const route = new RegExp(`^/api/events/(${uuid})/uploads(?:/(${uuid}))?$`);
 const problem = (status_code: number, body: string) => ({ status_code, body });
 type Session = { actor_id: string; event_id: string; metadata: string };
+
+export async function pruneUploads(db: NamiDatabase, directory: string, now = Date.now(), busy = new Set<string>()) {
+  const sessions = db.prepare('SELECT id, metadata FROM upload_sessions').all() as { id: string; metadata: string }[];
+  const active = new Set(sessions.map(row => row.id));
+  let removed = 0;
+  for (const session of sessions) {
+    if (busy.has(session.id)) continue;
+    const path = join(directory, session.id);
+    let modifiedAt = 0;
+    try { modifiedAt = (await stat(path)).mtimeMs; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    const createdAt = Date.parse((JSON.parse(session.metadata) as { creation_date?: string }).creation_date ?? '');
+    if (!Number.isFinite(createdAt) || Math.max(createdAt, modifiedAt) >= now - RETENTION_MS) continue;
+    // Drop the ledger row first. A crash after this leaves only an orphan file,
+    // which the second pass can remove after its grace period.
+    db.prepare('DELETE FROM upload_sessions WHERE id = ?').run(session.id);
+    active.delete(session.id);
+    try { await unlink(path); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    removed += 1;
+  }
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (!entry.isFile() || !new RegExp(`^${uuid}$`).test(entry.name) || active.has(entry.name) || busy.has(entry.name)) continue;
+    const path = join(directory, entry.name);
+    try {
+      if ((await stat(path)).mtimeMs < now - ORPHAN_GRACE_MS) {
+        await unlink(path);
+        removed += 1;
+      }
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  }
+  return removed;
+}
 
 // This first transport increment only stages bytes. JPEG validation and gallery
 // publication still use /media until durable finalization is implemented.
@@ -54,6 +89,13 @@ export async function registerUploads(app: FastifyInstance, db: NamiDatabase, da
   }
   const store = new PrivateStore({ directory, configstore });
   const finalizing = new Set<string>();
+  const inFlight = new Map<string, number>();
+  await pruneUploads(db, directory);
+  const pruning = setInterval(() => {
+    void pruneUploads(db, directory, Date.now(), new Set([...finalizing, ...inFlight.keys()])).catch(error => app.log.error(error));
+  }, 60 * 60 * 1000);
+  pruning.unref();
+  app.addHook('onClose', async () => clearInterval(pruning));
   // Fixed-length, empty creation only. No deferred allocation, concatenation,
   // public GET or expiry promise until lifecycle reconciliation is implemented.
   store.extensions = ['creation', 'termination'];
@@ -174,6 +216,18 @@ export async function registerUploads(app: FastifyInstance, db: NamiDatabase, da
         if (request.method !== 'HEAD' || request.headers.origin) await requireSameOrigin(secure)(request, reply);
       }, requireActor(db)],
       handler: async (request, reply) => {
+        const id = (request.params as { uploadId: string }).uploadId;
+        inFlight.set(id, (inFlight.get(id) ?? 0) + 1);
+        let released = false;
+        const release = () => {
+          if (released) return;
+          released = true;
+          const count = (inFlight.get(id) ?? 1) - 1;
+          if (count) inFlight.set(id, count);
+          else inFlight.delete(id);
+        };
+        reply.raw.once('finish', release);
+        reply.raw.once('close', release);
         reply.hijack();
         reply.raw.setHeader('Cache-Control', 'no-store');
         reply.raw.setHeader('X-Content-Type-Options', 'nosniff');
