@@ -391,3 +391,31 @@ only accepted format now.
   0 upload sessions match the pre-deploy snapshot. Every live original/preview
   hash matches. The reset command exists in the image, and no live reset
   backup was created: the live organizer credentials were not touched.
+
+## Guest invitation replacement increment
+
+- Organizer can replace a redeemed guest invitation from People & invitations,
+  including after expiry or revocation. A confirmation explains that existing
+  links and sessions stop working and the new bearer link acts as the same guest.
+  The organizer must verify the recipient outside NAMI before sharing it.
+- Replacement is one SQLite transaction: revoke all earlier links for that
+  guest/event, remove that event access and guest sessions, and issue a 30-day
+  replacement linked to the existing actor. Redeeming it restores event access
+  without asking for a new name. Earlier photo attribution stays with that actor.
+  Previously revoked rows cannot disable a newer active link.
+- Disposable API tests cover lost and revoked-link replacement, old sessions,
+  one guest actor, preserved JPEG attribution, unauthorized/cross-origin calls
+  and SQLite foreign keys. Browser flow covers organizer replacement and guest
+  recovery on desktop Chromium, iPad WebKit and iPhone WebKit profiles.
+- `npm run check` passed lint, TypeScript, production builds and 10 API tests.
+  `npm run test:e2e` passed 12 desktop Chromium and iPad/iPhone WebKit tests.
+  One iPad upload test stalled on an earlier run, then passed three focused
+  reruns and the final full suite; keep watching that upload retry flow.
+- The built image was deployed only to the existing loopback-bound Beechan
+  instance. Before deployment the stopped service was fully snapshotted at
+  `../nami-backups/pre-guest-recovery-20261019-2234`; nine active files matched
+  SHA-256, SQLite integrity/foreign keys passed, and a disposable restore ran
+  the new app successfully. The live service is healthy on `127.0.0.1:3000`;
+  actor/session/event/access/invitation/media/upload counts match the snapshot
+  (3/4/1/1/0/4/0), all four original hashes match, and no guest link was
+  replaced on live data.

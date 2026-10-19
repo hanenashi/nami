@@ -155,12 +155,31 @@ test('a contributor joins, shares one JPEG, and loses access when revoked', asyn
   await page.getByRole('link', { name: 'Invite people' }).click();
   await expect(page.getByText('Contributor · Aunt May')).toBeVisible();
   await expect(page.getByRole('button', { name: /Open photo/ })).toHaveCount(3);
-  await page.getByRole('button', { name: 'Revoke' }).click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Replace Aunt May’s link' }).click();
+  await expect(page.getByText('Replacement link for Aunt May')).toBeVisible();
+  const replacementLink = await page.getByLabel('Invitation link').inputValue();
+  expect(replacementLink).not.toBe(inviteLink);
   await expect(page.getByText('Contributor · Aunt May · Revoked')).toBeVisible();
+  if (testInfo.project.name === 'iphone-webkit') {
+    await page.screenshot({ path: '/tmp/nami-iphone-guest-replacement.png', fullPage: true });
+  }
   await guestPage.reload();
   await expect(guestPage.getByRole('alert')).toContainText('session is no longer active');
   await repeatPage.reload();
   await expect(repeatPage.getByRole('alert')).toContainText('session is no longer active');
+
+  const recoveredContext = await browser.newContext(testInfo.project.use);
+  const recoveredPage = await recoveredContext.newPage();
+  await recoveredPage.goto(replacementLink);
+  await expect(recoveredPage.getByText('Continue as Aunt May.')).toBeVisible();
+  await recoveredPage.getByRole('button', { name: 'Join event' }).click();
+  await expect(recoveredPage.getByText('Hello, Aunt May')).toBeVisible();
+  await expect(recoveredPage.getByRole('button', { name: /Open photo/ })).toHaveCount(3);
+  await page.getByRole('button', { name: 'Revoke' }).click();
+  await recoveredPage.reload();
+  await expect(recoveredPage.getByRole('alert')).toContainText('session is no longer active');
   await guestContext.close();
   await repeatContext.close();
+  await recoveredContext.close();
 });

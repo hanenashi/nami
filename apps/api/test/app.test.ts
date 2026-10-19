@@ -456,6 +456,103 @@ test('invitation redemption is event-scoped, repeatable and revocable', async (t
   assert.equal((await app.inject(`/api/invitations/${expiredSecret}`)).statusCode, 410);
 });
 
+test('replacing a guest link preserves identity and retires old access', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'nami-replace-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const dataRoot = join(root, 'data');
+  const webRoot = join(root, 'web');
+  await mkdir(webRoot);
+  await writeFile(join(webRoot, 'index.html'), '<title>NAMI fixture</title>');
+  const app = await buildApp({ dataRoot, webRoot });
+  t.after(() => app.close());
+  const origin = { host: 'nami.test', origin: 'http://nami.test' };
+  const setup = await app.inject({ method: 'POST', url: '/api/auth/setup', headers: origin,
+    payload: { displayName: 'Organizer', password: 'test organizer passphrase' } });
+  const organizerCookie = String(setup.headers['set-cookie']).split(';', 1)[0];
+  const organizerHeaders = { ...origin, cookie: organizerCookie };
+  const event = await app.inject({ method: 'POST', url: '/api/events', headers: organizerHeaders,
+    payload: { title: 'Family album', startDate: '2026-10-19' } });
+  const eventId = event.json().event.id as string;
+  const create = await app.inject({ method: 'POST', url: `/api/events/${eventId}/invitations`,
+    headers: organizerHeaders, payload: { role: 'contributor' } });
+  const inviteId = create.json().invitation.id as string;
+  const originalSecret = (create.json().invitePath as string).split('/').at(-1)!;
+  const replaceUrl = `/api/events/${eventId}/invitations/${inviteId}/replace`;
+  const replace = (headers: Record<string, string>, url = replaceUrl) => app.inject({
+    method: 'POST', url, headers, payload: {},
+  });
+  assert.equal((await replace(organizerHeaders)).statusCode, 409);
+  assert.equal((await replace(origin)).statusCode, 401);
+  assert.equal((await replace({ ...organizerHeaders, origin: 'http://other.test' })).statusCode, 403);
+
+  const redeemed = await app.inject({ method: 'POST', url: `/api/invitations/${originalSecret}/redeem`,
+    headers: origin, payload: { nickname: 'Aunt May' } });
+  assert.equal(redeemed.statusCode, 200);
+  const oldCookie = String(redeemed.headers['set-cookie']).split(';', 1)[0];
+  const database = new Database(join(dataRoot, 'db', 'nami.sqlite'));
+  t.after(() => database.close());
+  const actorId = (database.prepare('SELECT actor_id FROM invitations WHERE id = ?').get(inviteId) as { actor_id: string }).actor_id;
+  const jpeg = await sharp({ create: {
+    width: 16, height: 16, channels: 3, background: { r: 40, g: 80, b: 60 },
+  } }).jpeg().toBuffer();
+  const boundary = `nami-${randomUUID()}`;
+  const photo = await app.inject({ method: 'POST', url: `/api/events/${eventId}/media`,
+    headers: { ...origin, cookie: oldCookie, 'content-type': `multipart/form-data; boundary=${boundary}` },
+    payload: Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="memory.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`),
+      jpeg, Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]),
+  });
+  assert.equal(photo.statusCode, 201);
+  const mediaId = photo.json().media.id as string;
+  const created = await replace(organizerHeaders);
+  assert.equal(created.statusCode, 201);
+  assert.equal(created.json().invitation.guestName, 'Aunt May');
+  assert.equal(created.json().invitation.status, 'active');
+  const replacementId = created.json().invitation.id as string;
+  const replacementSecret = (created.json().invitePath as string).split('/').at(-1)!;
+  assert.notEqual(replacementSecret, originalSecret);
+  assert.equal((database.prepare('SELECT actor_id FROM invitations WHERE id = ?').get(replacementId) as { actor_id: string }).actor_id, actorId);
+  assert.equal((database.prepare('SELECT count(*) AS n FROM actors WHERE kind = ?').get('guest') as { n: number }).n, 1);
+  assert.equal((database.prepare('SELECT uploaded_by FROM media WHERE id = ?').get(mediaId) as { uploaded_by: string }).uploaded_by, actorId);
+  assert.equal((database.prepare('SELECT count(*) AS n FROM event_access WHERE actor_id = ?').get(actorId) as { n: number }).n, 0);
+  assert.equal((await app.inject({ url: `/api/events/${eventId}`, headers: { cookie: oldCookie } })).statusCode, 401);
+  assert.equal((await app.inject(`/api/invitations/${originalSecret}`)).statusCode, 410);
+  assert.equal((await app.inject({ method: 'POST', url: `/api/invitations/${originalSecret}/redeem`,
+    headers: origin, payload: {} })).statusCode, 410);
+  assert.equal((await replace(organizerHeaders)).statusCode, 409);
+  const replacementPreview = await app.inject(`/api/invitations/${replacementSecret}`);
+  assert.equal(replacementPreview.json().invitation.redeemedAs, 'Aunt May');
+  const joined = await app.inject({ method: 'POST', url: `/api/invitations/${replacementSecret}/redeem`,
+    headers: origin, payload: {} });
+  assert.equal(joined.statusCode, 200);
+  assert.equal(joined.json().access.displayName, 'Aunt May');
+  const newCookie = String(joined.headers['set-cookie']).split(';', 1)[0];
+  assert.equal((await app.inject({ url: `/api/events/${eventId}`, headers: { cookie: newCookie } })).statusCode, 200);
+  assert.equal((database.prepare('SELECT count(*) AS n FROM actors WHERE kind = ?').get('guest') as { n: number }).n, 1);
+  assert.equal((database.prepare('SELECT actor_id FROM event_access WHERE event_id = ? AND actor_id = ?')
+    .get(eventId, actorId) as { actor_id: string }).actor_id, actorId);
+  const gallery = await app.inject({ url: `/api/events/${eventId}/media`, headers: { cookie: newCookie } });
+  assert.equal(gallery.json().media.find((item: { id: string }) => item.id === mediaId).uploaderName, 'Aunt May');
+
+  // An old row must never revoke a newer invitation or session.
+  assert.equal((await app.inject({ method: 'POST', url: `/api/events/${eventId}/invitations/${inviteId}/revoke`,
+    headers: organizerHeaders })).statusCode, 204);
+  assert.equal((await app.inject({ url: `/api/events/${eventId}`, headers: { cookie: newCookie } })).statusCode, 200);
+  assert.equal((await app.inject({ method: 'POST', url: `/api/events/${eventId}/invitations/${replacementId}/revoke`,
+    headers: organizerHeaders })).statusCode, 204);
+  assert.equal((await app.inject({ url: `/api/events/${eventId}`, headers: { cookie: newCookie } })).statusCode, 401);
+  const restored = await replace(organizerHeaders);
+  assert.equal(restored.statusCode, 201);
+  const restoredSecret = (restored.json().invitePath as string).split('/').at(-1)!;
+  const restoredGuest = await app.inject({ method: 'POST', url: `/api/invitations/${restoredSecret}/redeem`,
+    headers: origin, payload: {} });
+  assert.equal(restoredGuest.statusCode, 200);
+  assert.equal((database.prepare('SELECT actor_id FROM invitations WHERE id = ?')
+    .get(restored.json().invitation.id) as { actor_id: string }).actor_id, actorId);
+  assert.deepEqual(database.pragma('foreign_key_check'), []);
+});
+
 test('a contributor can preserve one JPEG while viewer and cross-event writes are denied', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'nami-media-'));
   t.after(() => rm(root, { recursive: true, force: true }));

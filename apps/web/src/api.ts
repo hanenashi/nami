@@ -34,6 +34,7 @@ export type Invitation = {
   createdAt: number;
   lastRedeemedAt: number | null;
   redemptionCount: number;
+  canReplace: boolean;
 };
 
 export type InvitationPreview = {
@@ -138,6 +139,14 @@ export async function revokeInvitation(eventId: string, invitationId: string) {
     method: 'POST',
   });
   if (!response.ok) throw new Error('Couldn’t revoke the invitation. Please try again.');
+}
+
+export async function replaceInvitation(eventId: string, invitationId: string) {
+  return readJson<{ invitation: Invitation; invitePath: string }>(await fetch(
+    `/api/events/${encodeURIComponent(eventId)}/invitations/${encodeURIComponent(invitationId)}/replace`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    },
+  ));
 }
 
 export async function getInvitationPreview(secret: string) {

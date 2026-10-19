@@ -96,6 +96,7 @@ button:disabled { cursor: wait; opacity: .65; }
 .invitation-history li { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 82px; border-bottom: 1px solid var(--line); padding-block: 14px; }
 .invitation-history li > div { display: grid; gap: 6px; }
 .invitation-history li span { color: #566a63; font-size: 14px; line-height: 1.5; }
+.invitation-history .invitation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
 .small-button { min-height: 44px; border: 0; padding: 8px 4px; color: #7d2e25; background: transparent; font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
 .small-button:focus-visible { outline: 3px solid #203e36; outline-offset: 3px; }
 .invitation-page { max-width: 720px; padding: clamp(70px, 10vw, 140px) 0 80px; }

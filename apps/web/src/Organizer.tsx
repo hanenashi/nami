@@ -10,6 +10,7 @@ import {
   getMedia,
   loginOrganizer,
   logoutOrganizer,
+  replaceInvitation,
   revokeInvitation,
   setupOrganizer,
   type AuthStatus,
@@ -189,6 +190,7 @@ function invitationDescription(invitation: Invitation) {
   const guest = invitation.guestName ? ` · ${invitation.guestName}` : '';
   if (invitation.status === 'revoked') return `${role}${guest} · Revoked`;
   if (invitation.status === 'expired') return `${role}${guest} · Link expired`;
+  if (invitation.status === 'active' && invitation.guestName) return `${role}${guest} · Waiting for new link`;
   if (invitation.guestName) return `${role} · ${invitation.guestName}`;
   return `${role} · Waiting to be opened`;
 }
@@ -198,6 +200,8 @@ function InvitationsPanel({ eventId, initialInvitations }: { eventId: string; in
   const [newLink, setNewLink] = useState('');
   const [working, setWorking] = useState(false);
   const [revoking, setRevoking] = useState('');
+  const [replacing, setReplacing] = useState('');
+  const [linkLabel, setLinkLabel] = useState('Invitation ready');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
@@ -214,6 +218,7 @@ function InvitationsPanel({ eventId, initialInvitations }: { eventId: string; in
         expiresInDays: expiry ? Number(expiry) : undefined,
       });
       setInvitations(current => [result.invitation, ...current]);
+      setLinkLabel('Invitation ready');
       setNewLink(`${location.origin}${result.invitePath}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Couldn’t create the invitation.');
@@ -246,6 +251,25 @@ function InvitationsPanel({ eventId, initialInvitations }: { eventId: string; in
     }
   }
 
+  async function replace(invitation: Invitation) {
+    if (!invitation.guestName) return;
+    if (!window.confirm(`Replace ${invitation.guestName}’s invitation? Their old link and current sessions will stop working. Give the new link only to ${invitation.guestName} after checking with them.`)) return;
+    setReplacing(invitation.id);
+    setError('');
+    setCopied(false);
+    setNewLink('');
+    try {
+      const result = await replaceInvitation(eventId, invitation.id);
+      setLinkLabel(`Replacement link for ${invitation.guestName}`);
+      setNewLink(`${location.origin}${result.invitePath}`);
+      setInvitations((await getInvitations(eventId)).invitations);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Couldn’t replace the invitation.');
+    } finally {
+      setReplacing('');
+    }
+  }
+
   return (
     <section className="invitation-panel" aria-labelledby="invitations-heading">
       <h2 id="invitations-heading">Invite someone</h2>
@@ -272,13 +296,14 @@ function InvitationsPanel({ eventId, initialInvitations }: { eventId: string; in
       </form>
       {newLink ? (
         <div className="new-invitation" role="status">
-          <strong>Invitation ready</strong>
+          <strong>{linkLabel}</strong>
           <label className="field">
             <span>Copy this link now</span>
             <input aria-label="Invitation link" type="text" value={newLink} readOnly onFocus={event => event.currentTarget.select()} />
           </label>
           <button className="secondary-button" type="button" onClick={copyLink}>{copied ? 'Copied' : 'Copy link'}</button>
           <small>During local testing, the link opens only on a device connected to this NAMI address.</small>
+          {linkLabel.startsWith('Replacement') ? <small>This link opens the existing guest identity. Check who receives it before sharing.</small> : null}
         </div>
       ) : null}
       {error ? <p className="form-error" role="alert">{error}</p> : null}
@@ -295,11 +320,18 @@ function InvitationsPanel({ eventId, initialInvitations }: { eventId: string; in
                     {invitation.redemptionCount > 1 ? ` · Opened ${invitation.redemptionCount} times` : ''}
                   </span>
                 </div>
-                {invitation.status === 'active' || invitation.status === 'redeemed' ? (
-                  <button className="small-button" type="button" onClick={() => revoke(invitation.id)} disabled={revoking === invitation.id}>
-                    {revoking === invitation.id ? 'Revoking…' : 'Revoke'}
-                  </button>
-                ) : null}
+                <div className="invitation-actions">
+                  {invitation.canReplace && invitation.guestName ? (
+                    <button className="small-button" type="button" onClick={() => replace(invitation)} disabled={Boolean(replacing || revoking)}>
+                      {replacing === invitation.id ? 'Replacing…' : `Replace ${invitation.guestName}’s link`}
+                    </button>
+                  ) : null}
+                  {invitation.status === 'active' || invitation.status === 'redeemed' ? (
+                    <button className="small-button" type="button" onClick={() => revoke(invitation.id)} disabled={Boolean(revoking || replacing)}>
+                      {revoking === invitation.id ? 'Revoking…' : 'Revoke'}
+                    </button>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>

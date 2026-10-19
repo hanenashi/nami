@@ -153,7 +153,15 @@ hashed with scrypt; session cookies are HttpOnly and their raw values are not
 stored in the database. Invitation secrets are also stored only as hashes. Each
 link grants one event role, remembers the first nickname used, and can be
 revoked by the organizer; anyone who receives the link can use that access until
-then. Each upload accepts one JPEG up to 25 MB, verifies the actual file,
+then. If a guest loses a link, open **People & invitations** in the organizer
+album and choose **Replace [name]’s link**. Confirm the recipient’s identity
+outside NAMI before sharing the new link: anyone holding it can act as that
+guest. Replacement disables the old link and guest sessions, keeps their name
+and photo attribution, and gives the new link a 30-day expiry. A revoked guest
+can be invited back through the same action; creating an ordinary invitation
+instead creates a separate guest identity. NAMI sends no messages for you.
+
+Each upload accepts one JPEG up to 25 MB, verifies the actual file,
 stores its SHA-256, and generates a metadata-stripped preview. Original downloads
 retain the exact uploaded bytes and may therefore retain EXIF/GPS. The same-disk
 `backups/` folder is not disaster recovery. Manual full snapshots and disposable
@@ -178,6 +186,8 @@ Browser tests start a temporary server on `127.0.0.1:3100` with disposable data,
 then stop it and remove that data. They cover Chromium desktop and WebKit with
 iPad/iPhone device settings, including organizer setup, logout, repeat login,
 creating and reopening an event, guest redemption, repeat access and revocation.
+They also cover replacement links, old-session invalidation, and preserved guest
+identity after recovery.
 They also cover organizer photo selection/removal and double-confirmed event
 deletion using disposable generated JPEGs.
 The contributor flow also uploads a generated JPEG and displays its preview on

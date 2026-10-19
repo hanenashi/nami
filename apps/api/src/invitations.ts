@@ -63,11 +63,20 @@ function organizerCanManage(database: NamiDatabase, actorId: string, eventId: st
 function invitationStatus(row: InvitationRow, now = Date.now()) {
   if (row.revoked_at) return 'revoked' as const;
   if (row.expires_at && row.expires_at <= now) return 'expired' as const;
-  if (row.actor_id) return 'redeemed' as const;
+  if (row.redemption_count > 0) return 'redeemed' as const;
   return 'active' as const;
 }
 
-function serializeInvitation(row: InvitationRow) {
+function canReplace(database: NamiDatabase, row: InvitationRow) {
+  if (!row.actor_id || !row.guest_name) return false;
+  if (!row.revoked_at) return true;
+  return !database.prepare(`
+    SELECT 1 FROM invitations
+    WHERE actor_id = ? AND event_id = ? AND revoked_at IS NULL
+  `).get(row.actor_id, row.event_id);
+}
+
+function serializeInvitation(database: NamiDatabase, row: InvitationRow) {
   return {
     id: row.id,
     role: row.role,
@@ -77,6 +86,7 @@ function serializeInvitation(row: InvitationRow) {
     createdAt: row.created_at,
     lastRedeemedAt: row.last_redeemed_at,
     redemptionCount: row.redemption_count,
+    canReplace: canReplace(database, row),
   };
 }
 
@@ -121,7 +131,7 @@ export function registerInvitations(app: FastifyInstance, database: NamiDatabase
       WHERE invitations.event_id = ?
       ORDER BY invitations.created_at DESC
     `).all(request.params.eventId) as InvitationRow[];
-    return { invitations: rows.map(serializeInvitation) };
+    return { invitations: rows.map(row => serializeInvitation(database, row)) };
   });
 
   app.post<{ Params: { eventId: string }; Body: CreateInvitationBody }>('/api/events/:eventId/invitations', {
@@ -145,7 +155,7 @@ export function registerInvitations(app: FastifyInstance, database: NamiDatabase
     `).run(id, request.params.eventId, request.namiActor!.id, request.body.role, hashSecret(secret), expiresAt, now);
     const row = database.prepare(`${invitationQuery()} WHERE invitations.id = ?`).get(id) as InvitationRow;
     return reply.code(201).send({
-      invitation: serializeInvitation(row),
+      invitation: serializeInvitation(database, row),
       invitePath: `/invite/${secret}`,
     });
   });
@@ -156,20 +166,73 @@ export function registerInvitations(app: FastifyInstance, database: NamiDatabase
     if (!organizerCanManage(database, request.namiActor!.id, request.params.eventId)) {
       return reply.code(404).send({ error: 'Event not found.' });
     }
-    const invitation = database.prepare(`
-      SELECT actor_id FROM invitations WHERE id = ? AND event_id = ?
-    `).get(request.params.invitationId, request.params.eventId) as { actor_id: string | null } | undefined;
+    const invitation = database.prepare(`${invitationQuery()} WHERE invitations.id = ? AND invitations.event_id = ?`)
+      .get(request.params.invitationId, request.params.eventId) as InvitationRow | undefined;
     if (!invitation) return reply.code(404).send({ error: 'Invitation not found.' });
-    const now = Date.now();
     database.transaction(() => {
-      database.prepare('UPDATE invitations SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?').run(now, request.params.invitationId);
-      if (invitation.actor_id) {
+      if (invitation.revoked_at) return;
+      database.prepare('UPDATE invitations SET revoked_at = ? WHERE id = ?').run(Date.now(), request.params.invitationId);
+      if (invitation.actor_id && !database.prepare(`
+        SELECT 1 FROM invitations
+        WHERE actor_id = ? AND event_id = ? AND id != ? AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > ?)
+      `).get(invitation.actor_id, request.params.eventId, invitation.id, Date.now())) {
         database.prepare('DELETE FROM event_access WHERE actor_id = ? AND event_id = ?').run(invitation.actor_id, request.params.eventId);
         database.prepare('DELETE FROM sessions WHERE actor_id = ?').run(invitation.actor_id);
       }
     })();
     return reply.code(204).send();
   });
+
+  app.post<{ Params: { eventId: string; invitationId: string }; Body: { expiresInDays?: number } }>(
+    '/api/events/:eventId/invitations/:invitationId/replace', {
+      schema: { body: {
+        type: 'object', additionalProperties: false,
+        properties: { expiresInDays: { type: 'integer', minimum: 1, maximum: 365 } },
+      } },
+      preHandler: [sameOrigin, organizerOnly],
+    }, async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      if (!organizerCanManage(database, request.namiActor!.id, request.params.eventId)) {
+        return reply.code(404).send({ error: 'Event not found.' });
+      }
+      const secret = randomBytes(32).toString('base64url');
+      const replacement = database.transaction(() => {
+        const source = database.prepare(`${invitationQuery()}
+          WHERE invitations.id = ? AND invitations.event_id = ?
+        `).get(request.params.invitationId, request.params.eventId) as InvitationRow | undefined;
+        if (!source) return { error: 'Invitation not found.', statusCode: 404 } as const;
+        if (!source.actor_id || !source.guest_name) {
+          return { error: 'This invitation has not been used yet.', statusCode: 409 } as const;
+        }
+        if (!canReplace(database, source)) {
+          return { error: 'A newer link exists. Choose the latest invitation.', statusCode: 409 } as const;
+        }
+        const now = Date.now();
+        const expiresAt = now + (request.body?.expiresInDays ?? 30) * 24 * 60 * 60 * 1000;
+        // Retire every link for this guest, including an unused replacement.
+        database.prepare(`
+          UPDATE invitations SET revoked_at = ?
+          WHERE actor_id = ? AND event_id = ? AND revoked_at IS NULL
+        `).run(now, source.actor_id, source.event_id);
+        database.prepare('DELETE FROM event_access WHERE actor_id = ? AND event_id = ?')
+          .run(source.actor_id, source.event_id);
+        database.prepare('DELETE FROM sessions WHERE actor_id = ?').run(source.actor_id);
+        const id = randomUUID();
+        database.prepare(`
+          INSERT INTO invitations (
+            id, event_id, created_by, role, secret_hash, actor_id, expires_at, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, source.event_id, request.namiActor!.id, source.role, hashSecret(secret), source.actor_id, expiresAt, now);
+        return database.prepare(`${invitationQuery()} WHERE invitations.id = ?`).get(id) as InvitationRow;
+      })();
+      if ('error' in replacement) return reply.code(replacement.statusCode).send({ error: replacement.error });
+      return reply.code(201).send({
+        invitation: serializeInvitation(database, replacement),
+        invitePath: `/invite/${secret}`,
+      });
+    },
+  );
 
   app.get<{ Params: { secret: string } }>('/api/invitations/:secret', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
@@ -226,6 +289,12 @@ export function registerInvitations(app: FastifyInstance, database: NamiDatabase
           VALUES (?, ?, ?, ?)
         `).run(actorId, row.event_id, row.role, Date.now());
         database.prepare('UPDATE invitations SET actor_id = ? WHERE id = ?').run(actorId, row.id);
+      } else if (!database.prepare('SELECT 1 FROM event_access WHERE actor_id = ? AND event_id = ?')
+        .get(actorId, row.event_id)) {
+        database.prepare(`
+          INSERT INTO event_access (actor_id, event_id, role, created_at)
+          VALUES (?, ?, ?, ?)
+        `).run(actorId, row.event_id, row.role, Date.now());
       }
       const now = Date.now();
       database.prepare(`
