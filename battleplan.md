@@ -3,7 +3,7 @@
 > **NAMI / なみ / mezi námi** — memories made together.  
 > Repository: https://github.com/hanenashi/nami  
 > Existing README motto: **photo sharing done terribly right**  
-> State: private JPEG base running; isolated technical beta planned · Updated: 2026-10-20
+> State: isolated owner-only technical beta live; tester access gated · Updated: 2026-10-21
 
 ## 0. Beechan / Codex handoff
 
@@ -190,7 +190,7 @@ Removing an item from an event removes its event association, not a still-refere
 | Stage | Audience and access | Gate |
 |---|---|---|
 | 0 — Current development | Beechan Docker on `127.0.0.1:3000`; Pixel through a private SSH tunnel | Keep current data and fast iteration intact. |
-| 1 — Next: private technical beta | Separate `nami-beta` Docker project on `127.0.0.1:3001`, separate persistent data and backups; private HTTPS through Tailscale Serve for 2–5 trusted Pixel/iPhone/iPad testers | Prove isolation, access restrictions, HTTPS flows and recovery before inviting anyone. Use disposable photos. |
+| 1 — Current: private technical beta | Separate `nami-beta` Docker project on `127.0.0.1:3001`, separate persistent data and backups; private HTTPS through Tailscale Serve for eventual 2–5 trusted Pixel/iPhone/iPad testers | Isolation, HTTPS flows and recovery have passed with disposable photos; narrow and prove tester access before inviting anyone. |
 | 2 — Family pilot | Roughly 10–20 invited people using ordinary HTTPS links without VPN, installation or Google/Apple login | Explicit approval for internet access; security review, off-site automated backups, restore test, monitoring and recovery instructions first. Prefer Beechan if practical; evaluate a secure tunnel/reverse proxy against a small VPS. |
 | 3 — Publicly reachable self-hosted NAMI | Portable Docker Compose installation on Linux, Windows and macOS, stable domain and HTTPS | Events remain private; document hardening, storage migration, backups and controlled updates. |
 | 4 — Growth, only if needed | Larger albums and more users | Evaluate VPS hosting, object storage, CDN, background processing and shared-code Android/iOS apps without locking hosting or storage to one provider. |
@@ -426,9 +426,9 @@ Possible later: curated highlights, permanent members, album views across events
 
 ## 14. NEXT IMMEDIATE TASK FOR BEECHAN
 
-Implement **Stage 1 only**, following the sequence in §8. Start with read-only
-inspection of the existing Serve route and tailnet policy, then create the
-isolated beta and prove its HTTPS and recovery paths using disposable data.
-Keep development untouched. Record exact tests and results in STATUS.md,
-commit and push verified configuration/docs. Stop before inviting testers or
-opening NAMI to the public internet.
+Continue **Stage 1 only**. The isolated owner-only beta and private HTTPS are
+live, with synthetic-data browser and restore checks recorded in STATUS.md.
+The next task is to review the complete tailnet policy, narrow access for
+future shared users, and verify from an outside tester identity that only the
+beta HTTPS port is reachable. Keep development untouched. Stop before inviting
+testers or opening NAMI to the public internet.

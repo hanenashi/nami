@@ -20,12 +20,18 @@ interruption when the same files are selected again. Other photo and video
 formats come later. NAMI is not ready for real family photographs or public
 internet exposure yet.
 
-The next milestone is an **isolated private technical beta** on Beechan: a
-second Docker instance and data root, private HTTPS through Tailscale, and
-disposable-photo tests. It is planned, not deployed. The existing development
-instance at `127.0.0.1:3000` and its data stay intact. Testers will need
-Tailscale for this stage; ordinary no-installation family links belong to the
-later family pilot. See the [deployment stages and immediate roadmap](battleplan.md#8-deployment-stages-and-immediate-roadmap).
+An **owner-only private technical beta** now runs on Beechan with a second
+Docker instance, separate data and private Tailscale HTTPS. The existing
+development instance at `127.0.0.1:3000` is stopped and its data stay intact.
+Testers will need Tailscale for this stage; ordinary no-installation family
+links belong to the later family pilot. See the [deployment stages and immediate
+roadmap](battleplan.md#8-deployment-stages-and-immediate-roadmap).
+
+The beta's exact URL is shown by `tailscale serve status`; the
+[private beta operations note](docs/private-beta-ops.md) has start/stop,
+recovery and access requirements. It is unconfigured after synthetic tests:
+visit `/organizer` to create its first organizer. **Do not share Beechan with
+testers yet**; the tailnet access policy still needs to restrict them to NAMI.
 
 If the exact same JPEG is selected again for the same event, NAMI keeps the
 existing tile and original rather than adding another copy. The album reports

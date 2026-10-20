@@ -550,3 +550,40 @@ only accepted format now.
 - Family pilot follows only after a separate decision and readiness review:
   no-VPN links, off-site automated backups, restore proof, monitoring and
   recovery guidance. No public deployment or paid service is authorized.
+
+## Owner-only private beta deployed 2026-10-21
+
+- Added standalone `compose.beta.yaml`, pinned to local image
+  `nami-beta:3476e38`. The beta binds only `127.0.0.1:3001`, has Secure
+  cookies, and uses mode-0700 `../nami-beta-data`. Dev remains stopped on
+  port 3000. Its four active files and SQLite rows matched a pre-beta
+  fingerprint afterward; no development data was copied to beta.
+- Saved the original Serve configuration privately before adding beta HTTPS
+  on port 8443. The existing port-443 route was byte-for-byte unchanged in
+  Serve status. Both endpoints are tailnet-only; no Funnel or public bind was
+  configured. HTTPS health returned 200 locally and from Pixel Termux.
+- `npm run check` passed lint, build and 12 API tests. The full Playwright
+  suite ran **through the beta HTTPS URL** and passed 15 desktop Chromium and
+  iPad/iPhone WebKit tests. It exercised organizer login, invitations, JPEG
+  uploads, gallery and revocation with synthetic data. A direct HTTPS probe
+  confirmed Secure/HttpOnly/SameSite-Strict cookies, same-origin write
+  acceptance and wrong-Origin 403, byte-exact original download, authorized
+  preview, anonymous 401 and cross-event 404.
+- The stopped beta's synthetic-data snapshot verified 19 files, SQLite
+  integrity and zero foreign-key violations. A disposable restore served all
+  three events and matched the SHA-256 of all nine original JPEGs. A container
+  restart preserved the rows and 18 media files. Switching to a differently
+  labeled image and back preserved HTTPS health, three events and nine media
+  rows; both images contained identical application code, so a schema-changing
+  rollback remains untested.
+- After testing, the live beta was restored to the verified clean snapshot:
+  zero actors, sessions, events, invitations, media and uploads. It is healthy
+  over HTTPS and ready for the owner to create a new organizer. Synthetic data
+  and snapshots remain private outside Git; see `docs/private-beta-ops.md`.
+- **Tester access is still gated.** Beechan's effective tailnet filter allows
+  all tailnet ports, and the complete admin-console policy has not been
+  reviewed or tested from a separate shared-user identity. Sharing Beechan
+  now could expose its other services. No tester was invited. Physical iPad/
+  iPhone beta use, off-site backups and real schema-change rollback remain
+  unverified. The next step is policy review and narrow grants, then negative
+  access tests before selecting testers.
