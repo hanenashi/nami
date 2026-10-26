@@ -238,6 +238,14 @@ staging, uploads, previews and backups, with loopback binding by default.
 Physical iPad/iPhone and real Pixel testing remain important once access is
 approved. The family pilot must remove the Tailscale onboarding step.
 
+Stage 2 preparation now has an isolated, empty `nami-pilot` instance and a
+local Caddy edge. Private HTTPS port 10000 exercises the same edge intended for
+family links; owner controls are available separately through tailnet-only
+port 10001. The edge and app passed the checks in
+[family pilot preflight](docs/family-pilot-preflight.md). This preparation does
+not authorize the Funnel switch or invitations. Complete the preflight gates,
+including off-host recovery for valued photos, before the family pilot.
+
 Provide .env.example (no secrets), .gitignore, healthcheck, data location explanation, start/stop/update/rebuild instructions. Verify actual host constraints; do not assume Beechan's CPU, RAM, packages or disk capacity.
 
 ## 9. Backups (required before real family use)

@@ -1,0 +1,14 @@
+:8080 {
+	@owner path /superadmin /superadmin/* /api/superadmin /api/superadmin/*
+	handle @owner {
+		respond 404
+	}
+
+	handle {
+		reverse_proxy nami:3000 {
+			# Caddy ignores untrusted incoming X-Forwarded-* values by default.
+			# Rate limits remain shared until the Funnel client-IP path is verified.
+			header_up X-Forwarded-Proto https
+		}
+	}
+}

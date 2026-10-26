@@ -623,3 +623,18 @@ only accepted format now.
   only a configured proxy can supply a forwarded client IP.
 - `npm run check` passed lint, build and 13 API tests; `npm run test:e2e`
   passed all 15 desktop Chromium, iPad WebKit and iPhone WebKit tests.
+- Prepared a third, isolated `nami-pilot` Compose project. Its app and Caddy
+  edge are healthy on Beechan loopback ports 3002 and 3003. The pilot uses its
+  own mode-0700 data root and is currently empty. Full browser tests passed
+  over its original private HTTPS route, then synthetic test data was moved
+  aside; beta data was untouched.
+- Private Serve port 10000 now targets the Caddy edge. It blocks owner pages
+  and APIs; private Serve port 10001 targets the app directly for owner access.
+  Chromium phone and WebKit iPad loaded the organizer page over private HTTPS
+  through the edge. Same-origin and foreign-origin write checks returned 204
+  and 403 respectively. The owner Pixel reached both routes. All Serve routes
+  remain tailnet-only; Funnel is off. See
+  [family pilot preflight](docs/family-pilot-preflight.md).
+- Public opening and family invitations remain pending explicit owner review,
+  pilot organizer creation and the documented readiness gates. The public
+  client-IP path and off-host backup/restore for valued photos remain untested.

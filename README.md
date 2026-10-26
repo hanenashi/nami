@@ -38,6 +38,15 @@ policy limits externally shared users to beta HTTPS. Further testers must
 receive machine shares, not full tailnet membership, after the remaining
 access checks. Do not send organizer credentials to guests.
 
+A separate **family pilot candidate** is prepared on Beechan at
+`https://beechan.tail8d9f69.ts.net:10000/`. It is still **tailnet-only** and
+has a fresh, empty database. Its edge blocks owner controls; those remain
+available to the owner through private tailnet port 10001. Set up its organizer
+privately before considering external access. The
+[family pilot preflight](docs/family-pilot-preflight.md) records verified checks,
+remaining gates, operations and rollback. No public switch or invitation has
+been made.
+
 If the exact same JPEG is selected again for the same event, NAMI keeps the
 existing tile and original rather than adding another copy. The album reports
 how many selected files were already present. The first contributor attribution
