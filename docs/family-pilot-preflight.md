@@ -1,7 +1,7 @@
 # Family pilot preflight (Beechan)
 
 Status: **prepared, private, not open to the internet**. Do not send this URL
-to family yet. The pilot database is disposable test data.
+to family yet. The pilot database contains disposable test data.
 
 ## Routes and isolation
 
@@ -43,13 +43,22 @@ known local proxy addresses. Never trust arbitrary `X-Forwarded-For` values.
 - Docker app and edge are healthy. Beta remains healthy and its data was not
   changed by this preparation. Tailscale reports every Serve route as
   `tailnet only`; Funnel is off.
+- The owner created a pilot organizer and event, then reported successful
+  invitation, upload and duplicate checks, including two people selecting an
+  already uploaded photo. On 2026-10-27, the live pilot had two actors, one
+  event, one invitation and 13 media rows. SQLite integrity and foreign-key
+  checks passed. All 13 original JPEGs matched their stored SHA-256 hashes.
+- A consistent full snapshot was made while the pilot app was briefly stopped,
+  at `../nami-pilot-backups/private-pilot-20261026T164113Z` (UTC timestamp).
+  Its 29-file hash manifest passed. A separate restore container served health
+  and the album and retained the same actor, event, invitation and media counts.
+  The restore test root was removed; the snapshot remains on Beechan only.
 
 ## Before a public family pilot
 
-1. Owner creates the pilot organizer at the private port-10000 `/organizer`
-   page and stores its passphrase. Configure a separate superadmin passphrase
-   from an interactive Beechan terminal, if owner recovery is desired, then
-   verify it only at private port 10001. Do not share either credential.
+1. The owner has created the pilot organizer. Configure a separate superadmin
+   passphrase from an interactive Beechan terminal if owner recovery is desired,
+   then verify it only at private port 10001. Do not share either credential.
 2. Decide whether the pilot will still use disposable photos. Before anyone
    entrusts valued photos, set up automatic **off-host** full backups of SQLite
    plus original files, test a clean restore, and document recovery contacts.

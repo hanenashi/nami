@@ -40,9 +40,9 @@ access checks. Do not send organizer credentials to guests.
 
 A separate **family pilot candidate** is prepared on Beechan at
 `https://beechan.tail8d9f69.ts.net:10000/`. It is still **tailnet-only** and
-has a fresh, empty database. Its edge blocks owner controls; those remain
-available to the owner through private tailnet port 10001. Set up its organizer
-privately before considering external access. The
+has a separate database with disposable test photos. The owner has created its
+organizer and tested invitations and uploads. Its edge blocks owner controls;
+those remain available through private tailnet port 10001. The
 [family pilot preflight](docs/family-pilot-preflight.md) records verified checks,
 remaining gates, operations and rollback. No public switch or invitation has
 been made.

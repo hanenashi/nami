@@ -636,5 +636,13 @@ only accepted format now.
   remain tailnet-only; Funnel is off. See
   [family pilot preflight](docs/family-pilot-preflight.md).
 - Public opening and family invitations remain pending explicit owner review,
-  pilot organizer creation and the documented readiness gates. The public
+  and the documented readiness gates. The public
   client-IP path and off-host backup/restore for valued photos remain untested.
+- The owner created a pilot organizer and event and reported successful
+  invitation, upload and cross-user duplicate tests. A read-only audit showed
+  two actors, one event, one invitation and 13 media rows, with SQLite and
+  foreign-key checks passing. A brief-stop full snapshot verified all 13
+  original hashes and a 29-file SHA-256 manifest. A separate restore container
+  returned HTTP 200 for health and the album and kept matching row counts.
+  Snapshot: `../nami-pilot-backups/private-pilot-20261026T164113Z` (UTC).
+  It remains on Beechan, not off-host. The live pilot was restarted healthy.

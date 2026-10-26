@@ -238,7 +238,8 @@ staging, uploads, previews and backups, with loopback binding by default.
 Physical iPad/iPhone and real Pixel testing remain important once access is
 approved. The family pilot must remove the Tailscale onboarding step.
 
-Stage 2 preparation now has an isolated, empty `nami-pilot` instance and a
+Stage 2 preparation now has an isolated `nami-pilot` instance with disposable
+test photos and a
 local Caddy edge. Private HTTPS port 10000 exercises the same edge intended for
 family links; owner controls are available separately through tailnet-only
 port 10001. The edge and app passed the checks in
