@@ -4,12 +4,15 @@ import { buildApp } from './app.js';
 
 const port = Number(process.env.PORT ?? '3000');
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be between 1 and 65535');
+const trustedProxies = process.env.NAMI_TRUSTED_PROXIES?.split(',').map(address => address.trim());
+if (trustedProxies?.some(address => !address)) throw new Error('NAMI_TRUSTED_PROXIES contains an empty address');
 
 const app = await buildApp({
   dataRoot: resolve(process.env.NAMI_DATA_DIR ?? '../nami-data'),
   webRoot: fileURLToPath(new URL('../../web/dist/', import.meta.url)),
   logger: true,
   secureCookies: process.env.NAMI_SECURE_COOKIES === 'true',
+  trustedProxies,
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

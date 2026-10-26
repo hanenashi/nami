@@ -219,8 +219,11 @@ Optionally copy `.env.example` to `.env`, make it mode `0600`, and edit its
 non-secret settings before starting. `NAMI_DATA_DIR` sets the host directory;
 inside the container the path is always `/data`. `NAMI_PORT` changes the host
 port. `NAMI_SECURE_COOKIES` stays `false` for local HTTP and must be `true` under
-HTTPS. The Compose port is explicitly bound to **127.0.0.1**, not the LAN or
-public internet. There is deliberately no public-bind toggle yet.
+HTTPS. An HTTPS reverse proxy can set `NAMI_TRUSTED_PROXIES` to its exact IP or
+CIDR so login and invitation rate limits use client addresses; forwarded
+headers remain untrusted by default. The Compose port is explicitly bound to
+**127.0.0.1**, not the LAN or public internet. There is deliberately no
+public-bind toggle yet.
 
 Only built web assets are served. The data tree is never a static web directory.
 Data, photographs, databases, backups and local environment files must stay out

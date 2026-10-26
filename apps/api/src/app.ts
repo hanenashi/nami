@@ -13,7 +13,13 @@ import { registerSuperadmin, type MaintenanceGate } from './superadmin.js';
 
 export const dataDirectories = ['db', 'staging', 'uploads', 'originals', 'previews', 'backups'] as const;
 
-export async function buildApp(options: { dataRoot: string; webRoot: string; logger?: boolean; secureCookies?: boolean }) {
+export async function buildApp(options: {
+  dataRoot: string;
+  webRoot: string;
+  logger?: boolean;
+  secureCookies?: boolean;
+  trustedProxies?: string[];
+}) {
   // Fail startup if storage is unusable; the entire data tree is separate from static assets.
   await Promise.all(dataDirectories.map(async (directory) => {
     const path = join(options.dataRoot, directory);
@@ -26,6 +32,7 @@ export async function buildApp(options: { dataRoot: string; webRoot: string; log
     logger: options.logger ?? false,
     logController: new LogController({ disableRequestLogging: true }),
     bodyLimit: 32 * 1024,
+    trustProxy: options.trustedProxies?.length ? options.trustedProxies : false,
   });
   const database = openDatabase(options.dataRoot);
   const maintenance: MaintenanceGate = { activeRequests: 0, resetInProgress: false };

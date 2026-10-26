@@ -58,6 +58,27 @@ test('startup rejects an invalid data root instead of claiming readiness', async
   await assert.rejects(buildApp({ dataRoot, webRoot: root }));
 });
 
+test('only configured proxy addresses may supply the client IP', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'nami-proxy-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const webRoot = join(root, 'web');
+  await mkdir(webRoot);
+  await writeFile(join(webRoot, 'index.html'), '<!doctype html><title>NAMI fixture</title>');
+  const direct = await buildApp({ dataRoot: join(root, 'direct'), webRoot });
+  t.after(() => direct.close());
+  direct.get('/test-ip', async request => ({ ip: request.ip }));
+  const headers = { 'x-forwarded-for': '198.51.100.25' };
+  const fromProxy = { url: '/test-ip', remoteAddress: '127.0.0.1', headers };
+  assert.deepEqual((await direct.inject(fromProxy)).json(), { ip: '127.0.0.1' });
+
+  const proxied = await buildApp({ dataRoot: join(root, 'proxied'), webRoot, trustedProxies: ['127.0.0.1'] });
+  t.after(() => proxied.close());
+  proxied.get('/test-ip', async request => ({ ip: request.ip }));
+  assert.deepEqual((await proxied.inject(fromProxy)).json(), { ip: '198.51.100.25' });
+  assert.deepEqual((await proxied.inject({ ...fromProxy, remoteAddress: '203.0.113.12' })).json(),
+    { ip: '203.0.113.12' });
+});
+
 test('organizer setup, login and logout persist safely', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'nami-auth-'));
   t.after(() => rm(root, { recursive: true, force: true }));

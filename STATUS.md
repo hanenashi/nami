@@ -610,3 +610,16 @@ only accepted format now.
   account remains available, and the machine share should be revoked if it is
   not needed. This does not relax the off-site backup and restore gate for a
   future pilot carrying irreplaceable family photos.
+
+## Browser-only pilot preparation — 2026-10-27
+
+- The owner revoked the external machine share and authorized work toward the
+  next stage. No public endpoint, router rule, Funnel or paid service has been
+  created. Current beta data remains disposable and separate from development.
+- Updated both locked transitive `fast-uri` copies to patched releases. A
+  production dependency audit now reports zero known vulnerabilities.
+- Added an optional exact-IP/CIDR trusted-proxy setting for client-address
+  rate limits. Forwarded headers remain untrusted by default; a test confirms
+  only a configured proxy can supply a forwarded client IP.
+- `npm run check` passed lint, build and 13 API tests; `npm run test:e2e`
+  passed all 15 desktop Chromium, iPad WebKit and iPhone WebKit tests.
