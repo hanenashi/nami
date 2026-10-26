@@ -580,10 +580,16 @@ only accepted format now.
   zero actors, sessions, events, invitations, media and uploads. It is healthy
   over HTTPS and ready for the owner to create a new organizer. Synthetic data
   and snapshots remain private outside Git; see `docs/private-beta-ops.md`.
-- **Tester access is still gated.** Beechan's effective tailnet filter allows
-  all tailnet ports, and the complete admin-console policy has not been
-  reviewed or tested from a separate shared-user identity. Sharing Beechan
-  now could expose its other services. No tester was invited. Physical iPad/
-  iPhone beta use, off-site backups and real schema-change rollback remain
-  unverified. The next step is policy review and narrow grants, then negative
-  access tests before selecting testers.
+- On 2026-10-27, backed up the complete Tailscale policy privately and
+  replaced its broad `*` grant with full access for `autogroup:member` and
+  Beechan TCP 8443 only for `autogroup:shared`. The candidate passed Tailscale
+  validation, and API readback matched the applied policy. Tailscale SSH and
+  node attributes were unchanged. The beta container remained healthy; HTTPS
+  `/api/health` returned 200 from Beechan and Pixel, and the existing port-443
+  Serve route remained configured. No tester was invited and no public route
+  was created.
+- **Tester access is still gated.** Tailscale's saved-policy tests cannot use
+  `autogroup:shared` as a test source, so an actual outside shared-user account
+  must prove it can reach beta but cannot reach Beechan port 443, SSH or other
+  services. Physical iPad/iPhone beta use, off-site backups and real
+  schema-change rollback also remain unverified. Do not invite testers yet.

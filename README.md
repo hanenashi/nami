@@ -31,7 +31,8 @@ The beta's exact URL is shown by `tailscale serve status`; the
 [private beta operations note](docs/private-beta-ops.md) has start/stop,
 recovery and access requirements. It is unconfigured after synthetic tests:
 visit `/organizer` to create its first organizer. **Do not share Beechan with
-testers yet**; the tailnet access policy still needs to restrict them to NAMI.
+testers yet**; the tailnet policy now limits externally shared users to beta
+HTTPS, but access still needs a deny check from an actual outside account.
 
 If the exact same JPEG is selected again for the same event, NAMI keeps the
 existing tile and original rather than adding another copy. The album reports

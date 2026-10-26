@@ -16,12 +16,16 @@ invited, and NAMI has no public internet route.
 - Tailscale Serve adds private HTTPS on port 8443. Its existing port-443 root
   route serves another application and must remain unchanged. Discover the
   beta URL with `tailscale serve status`; use `/organizer` for first setup.
-- Beechan's effective tailnet filter currently permits the full tailnet port
-  range. **Do not share Beechan or add external testers yet.** Review the
-  complete admin-console policy, replace broad access with grants that let
-  selected testers reach only beta HTTPS, and prove from a separate tester
-  identity that other Beechan ports are denied. Grants add permissions; a
-  narrower grant does not cancel a broader one. Keep Tailscale Funnel off.
+- On 2026-10-27, the complete tailnet policy was backed up privately and its
+  broad `*`-to-`*` grant was replaced with two grants: direct tailnet members
+  retain full access, while externally shared users can reach Beechan only on
+  TCP 8443. Existing Tailscale SSH and node-attribute settings were preserved.
+  The candidate passed Tailscale's policy validator and API readback matched.
+  Owner access to beta HTTPS was checked from Pixel. **Do not share Beechan or
+  add external testers yet:** a real external shared-user device must confirm
+  beta works while port 443, SSH and other Beechan services are denied. Policy
+  tests using `autogroup:shared` as a test source were rejected by Tailscale;
+  no such tests were saved. Keep Tailscale Funnel off.
 
 ## Routine commands
 
