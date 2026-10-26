@@ -588,8 +588,15 @@ only accepted format now.
   `/api/health` returned 200 from Beechan and Pixel, and the existing port-443
   Serve route remained configured. No tester was invited and no public route
   was created.
-- **Tester access is still gated.** Tailscale's saved-policy tests cannot use
-  `autogroup:shared` as a test source, so an actual outside shared-user account
-  must prove it can reach beta but cannot reach Beechan port 443, SSH or other
-  services. Physical iPad/iPhone beta use, off-site backups and real
-  schema-change rollback also remain unverified. Do not invite testers yet.
+- The owner created a beta organizer and event. One trusted separate-tailnet
+  Pixel accepted a Beechan machine share and loaded beta `/api/health`, the
+  NAMI page and the event after organizer login. Beechan's port-443 URL kept
+  loading without a response on that Pixel; the owner's Pixel received an
+  immediate HTTP 404 from the same URL. This supports the intended port
+  restriction but does not measure a final timeout or SSH denial. The OAuth
+  credential used for policy setup was revoked by the owner and its local
+  secret file was removed. Beta SQLite integrity and foreign keys passed.
+- **Broader tester rollout is still gated.** No NAMI guest invitation was
+  tested from the separate-tailnet device, and external SSH denial has not
+  been measured. Physical iPad/iPhone beta use, off-site backups and real
+  schema-change rollback also remain unverified. Do not add more testers yet.

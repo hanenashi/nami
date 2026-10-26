@@ -1,8 +1,9 @@
 # Beechan private beta operations
 
-This is an owner-only technical deployment. It uses disposable photos until
-off-site recovery and family-pilot readiness are complete. No tester has been
-invited, and NAMI has no public internet route.
+This is a private technical deployment. It uses disposable photos until
+off-site recovery and family-pilot readiness are complete. One trusted external
+Android device has a machine share for the access test. NAMI has no public
+internet route.
 
 ## Isolation and access
 
@@ -21,13 +22,16 @@ invited, and NAMI has no public internet route.
   retain full access, while externally shared users can reach Beechan only on
   TCP 8443. Existing Tailscale SSH and node-attribute settings were preserved.
   The candidate passed Tailscale's policy validator and API readback matched.
-  Owner access to beta HTTPS was checked from Pixel. **Do not share Beechan or
-  add external testers yet:** eventual testers must receive a share of the
-  Beechan machine, not an invitation to become full tailnet members. A real
-  external shared-user device must confirm beta works while port 443, SSH and
-  other Beechan services are denied. Policy
-  tests using `autogroup:shared` as a test source were rejected by Tailscale;
-  no such tests were saved. Keep Tailscale Funnel off.
+  Owner access to beta HTTPS was checked from Pixel. Tailscale's saved policy
+  tests rejected `autogroup:shared` as a test source; no such tests were saved.
+  On 2026-10-27, a separate-tailnet Pixel accepted a machine share. Its browser
+  loaded beta `/api/health`, the NAMI page and an event after organizer login.
+  Beechan's port-443 HTTPS URL kept loading without a response on that Pixel,
+  while the owner's Pixel received HTTP 404 from the same URL. This is strong
+  evidence of the intended deny, but a timed connection result and SSH denial
+  have not been measured from the external device. No NAMI guest invitation
+  flow was tested on that device. Keep Tailscale Funnel off. Future testers
+  must receive machine shares, not full tailnet membership.
 
 ## Routine commands
 

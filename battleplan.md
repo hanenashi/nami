@@ -190,7 +190,7 @@ Removing an item from an event removes its event association, not a still-refere
 | Stage | Audience and access | Gate |
 |---|---|---|
 | 0 — Current development | Beechan Docker on `127.0.0.1:3000`; Pixel through a private SSH tunnel | Keep current data and fast iteration intact. |
-| 1 — Current: private technical beta | Separate `nami-beta` Docker project on `127.0.0.1:3001`, separate persistent data and backups; private HTTPS through Tailscale Serve for eventual 2–5 trusted Pixel/iPhone/iPad testers | Isolation, HTTPS flows and recovery passed with disposable photos. Tailnet grants are now narrow; prove them from an outside shared-user device before inviting testers. |
+| 1 — Current: private technical beta | Separate `nami-beta` Docker project on `127.0.0.1:3001`, separate persistent data and backups; private HTTPS through Tailscale Serve for eventual 2–5 trusted Pixel/iPhone/iPad testers | Isolation, HTTPS flows and recovery passed with disposable photos. One external Pixel reached NAMI through a machine share while port 443 did not load; finish negative-port and guest-invitation checks before broader rollout. |
 | 2 — Family pilot | Roughly 10–20 invited people using ordinary HTTPS links without VPN, installation or Google/Apple login | Explicit approval for internet access; security review, off-site automated backups, restore test, monitoring and recovery instructions first. Prefer Beechan if practical; evaluate a secure tunnel/reverse proxy against a small VPS. |
 | 3 — Publicly reachable self-hosted NAMI | Portable Docker Compose installation on Linux, Windows and macOS, stable domain and HTTPS | Events remain private; document hardening, storage migration, backups and controlled updates. |
 | 4 — Growth, only if needed | Larger albums and more users | Evaluate VPS hosting, object storage, CDN, background processing and shared-code Android/iOS apps without locking hosting or storage to one provider. |
@@ -429,6 +429,8 @@ Possible later: curated highlights, permanent members, album views across events
 Continue **Stage 1 only**. The isolated owner-only beta and private HTTPS are
 live, with synthetic-data browser and restore checks recorded in STATUS.md.
 The tailnet policy now limits externally shared users to Beechan TCP 8443.
-The next task is to verify from an outside shared-user identity that only the
-beta HTTPS port is reachable. Keep development untouched. Stop before inviting
-testers or opening NAMI to the public internet.
+One outside shared-user Pixel reached NAMI while the separate port-443 service
+did not respond. Next, measure a definite external denial for other Beechan
+ports and test a NAMI guest invitation without organizer credentials. Keep
+development untouched. Stop before adding more testers or opening NAMI to the
+public internet.

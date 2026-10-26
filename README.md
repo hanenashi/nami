@@ -29,12 +29,12 @@ roadmap](battleplan.md#8-deployment-stages-and-immediate-roadmap).
 
 The beta's exact URL is shown by `tailscale serve status`; the
 [private beta operations note](docs/private-beta-ops.md) has start/stop,
-recovery and access requirements. It is unconfigured after synthetic tests:
-visit `/organizer` to create its first organizer. **Do not share Beechan with
-testers yet**; the tailnet policy now limits externally shared users to beta
-HTTPS, but access still needs a deny check from an actual outside account.
-When that gate passes, testers must receive a machine share, not full tailnet
-membership.
+recovery and access requirements. The owner created its first organizer and
+event. One trusted external Android device has reached NAMI through a machine
+share; Beechan's other HTTPS port did not load from that device. The tailnet
+policy limits externally shared users to beta HTTPS. Further testers must
+receive machine shares, not full tailnet membership, after the remaining
+access checks. Do not send organizer credentials to guests.
 
 If the exact same JPEG is selected again for the same event, NAMI keeps the
 existing tile and original rather than adding another copy. The album reports
