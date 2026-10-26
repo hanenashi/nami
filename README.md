@@ -33,6 +33,8 @@ recovery and access requirements. It is unconfigured after synthetic tests:
 visit `/organizer` to create its first organizer. **Do not share Beechan with
 testers yet**; the tailnet policy now limits externally shared users to beta
 HTTPS, but access still needs a deny check from an actual outside account.
+When that gate passes, testers must receive a machine share, not full tailnet
+membership.
 
 If the exact same JPEG is selected again for the same event, NAMI keeps the
 existing tile and original rather than adding another copy. The album reports

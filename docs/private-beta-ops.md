@@ -22,8 +22,10 @@ invited, and NAMI has no public internet route.
   TCP 8443. Existing Tailscale SSH and node-attribute settings were preserved.
   The candidate passed Tailscale's policy validator and API readback matched.
   Owner access to beta HTTPS was checked from Pixel. **Do not share Beechan or
-  add external testers yet:** a real external shared-user device must confirm
-  beta works while port 443, SSH and other Beechan services are denied. Policy
+  add external testers yet:** eventual testers must receive a share of the
+  Beechan machine, not an invitation to become full tailnet members. A real
+  external shared-user device must confirm beta works while port 443, SSH and
+  other Beechan services are denied. Policy
   tests using `autogroup:shared` as a test source were rejected by Tailscale;
   no such tests were saved. Keep Tailscale Funnel off.
 
