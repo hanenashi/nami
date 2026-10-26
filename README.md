@@ -44,8 +44,14 @@ has a separate database with disposable test photos. The owner has created its
 organizer and tested invitations and uploads. Its edge blocks owner controls;
 those remain available through private tailnet port 10001. The
 [family pilot preflight](docs/family-pilot-preflight.md) records verified checks,
-remaining gates, operations and rollback. No public switch or invitation has
-been made.
+remaining gates, operations and rollback. No public switch or family invitation
+has been made.
+
+The pilot now has an encrypted daily backup to Kurochan. A restore from that
+remote copy has passed, including original-photo hashes. Kurochan is a second
+machine in the same home, so a separate-site backup and recovery-key copy are
+still needed before relying on NAMI for valued family photographs. Backup
+commands and monitoring are in the [pilot preflight](docs/family-pilot-preflight.md#encrypted-backup-and-recovery).
 
 If the exact same JPEG is selected again for the same event, NAMI keeps the
 existing tile and original rather than adding another copy. The album reports

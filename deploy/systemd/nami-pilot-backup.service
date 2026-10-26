@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up private NAMI pilot to Kurochan
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/beechan/GIT/nami
+ExecStart=/usr/bin/sg docker -c /home/beechan/GIT/nami/scripts/backup-pilot.py
+ExecStopPost=/usr/bin/sg docker -c 'docker compose -f compose.pilot.yaml up -d --no-build --wait'

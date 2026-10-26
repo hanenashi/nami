@@ -52,17 +52,25 @@ known local proxy addresses. Never trust arbitrary `X-Forwarded-For` values.
   at `../nami-pilot-backups/private-pilot-20261026T164113Z` (UTC timestamp).
   Its 29-file hash manifest passed. A separate restore container served health
   and the album and retained the same actor, event, invitation and media counts.
-  The restore test root was removed; the snapshot remains on Beechan only.
+  The restore test root was removed; the local snapshot remains on Beechan,
+  with an encrypted copy subsequently sent to Kurochan.
+- An encrypted Restic repository now exists on Kurochan under the owner's
+  `NAMI-backups/pilot` directory. The first snapshot (`b00fbe77`) passed a full
+  repository data check and was restored **from Kurochan** into a disposable
+  container. Health, album, all 29 manifest entries, SQLite checks, row counts
+  and all 13 original hashes passed. The repeatable backup script and the
+  installed user systemd service also ran successfully on 2026-10-27.
 
 ## Before a public family pilot
 
 1. The owner has created the pilot organizer. Configure a separate superadmin
    passphrase from an interactive Beechan terminal if owner recovery is desired,
    then verify it only at private port 10001. Do not share either credential.
-2. Decide whether the pilot will still use disposable photos. Before anyone
-   entrusts valued photos, set up automatic **off-host** full backups of SQLite
-   plus original files, test a clean restore, and document recovery contacts.
-   Same-disk snapshots and NAMI's internal SQLite backups are insufficient.
+2. Decide whether the pilot will still use disposable photos. The daily
+   encrypted backup to Kurochan is **off-host**, but both machines are in the
+   same home. Before anyone entrusts valued photos, add a geographically
+   separate copy, test its clean restore, and keep a recovery-key copy outside
+   those two machines. Same-disk snapshots alone are insufficient.
 3. Review account recovery, invitation permissions, upload size limits,
    storage capacity, monitoring and the public URL. Repeat login, invitation,
    upload, preview, original download, cross-event denial and revocation tests
@@ -108,3 +116,44 @@ Verify `tailnet only` before declaring rollback complete. Stopping the
 Compose project also removes the public app response but does not remove the
 Funnel rule, so disabling Funnel is the first incident action. Preserve the
 data tree and inspect logs without printing credentials or invite secrets.
+
+## Encrypted backup and recovery
+
+`scripts/backup-pilot.py` briefly stops only the pilot app, copies its full
+data tree to a new mode-0700 directory under `../nami-pilot-backups`, verifies
+SQLite integrity, foreign keys, each stored original and a SHA-256 file
+manifest, then restarts the app in a `finally` block. After the app is healthy,
+it sends that snapshot over SFTP/SSH to an encrypted Restic repository on
+Kurochan and runs `restic check`. A failed remote transfer leaves the local
+snapshot intact and returns a failing service status. Backup directories are
+currently retained without automatic pruning; monitor Beechan and Kurochan
+disk use. The brief stop means the pilot can return 502 during a backup.
+
+The encryption password is **never in Git or command arguments**. Beechan's
+mode-0600 file is `~/.config/nami/restic-pilot-password`; a recovery copy is
+`C:\Users\hanenashi\NAMI-backups\restic-pilot-password` on Kurochan with an
+explicit ACL for the owner, Administrators and SYSTEM. Keep an additional
+private recovery copy before relying on this for valued photos. Losing every
+password copy makes the encrypted repository unreadable. Do not print or send
+the password through chat.
+
+The user systemd timer `nami-pilot-backup.timer` is installed and enabled for
+daily 12:00 local time with up to 30 minutes random delay. It requires
+Kurochan to be awake and reachable over SSH. Check the last result and next
+run regularly:
+
+```sh
+systemctl --user status nami-pilot-backup.service --no-pager
+systemctl --user list-timers nami-pilot-backup.timer --no-pager
+journalctl --user -u nami-pilot-backup.service -n 40 --no-pager
+```
+
+From the repo, a manual run uses `sg docker -c './scripts/backup-pilot.py'`
+for the current Beechan shell's Docker group. For recovery on Beechan, set
+`RESTIC_PASSWORD_FILE` to the protected file path, then use
+`restic -r sftp:kurochan:NAMI-backups/pilot snapshots` and
+`restic -r sftp:kurochan:NAMI-backups/pilot restore <snapshot-id> --target <clean-directory>`.
+The restored snapshot contains the original absolute path below that target;
+copy its data tree into a **new** root and verify it before switching any live
+container. The remote-restored test container was removed after verification.
+Do not overwrite the current pilot data root during a rehearsal.

@@ -246,6 +246,9 @@ port 10001. The edge and app passed the checks in
 [family pilot preflight](docs/family-pilot-preflight.md). This preparation does
 not authorize the Funnel switch or invitations. Complete the preflight gates,
 including off-host recovery for valued photos, before the family pilot.
+The pilot now has a verified encrypted backup on Kurochan and a daily Beechan
+timer. Because both machines are in one home, this covers a single-machine
+failure but does not meet the separate-site recovery gate.
 
 Provide .env.example (no secrets), .gitignore, healthcheck, data location explanation, start/stop/update/rebuild instructions. Verify actual host constraints; do not assume Beechan's CPU, RAM, packages or disk capacity.
 

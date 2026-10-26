@@ -625,7 +625,7 @@ only accepted format now.
   passed all 15 desktop Chromium, iPad WebKit and iPhone WebKit tests.
 - Prepared a third, isolated `nami-pilot` Compose project. Its app and Caddy
   edge are healthy on Beechan loopback ports 3002 and 3003. The pilot uses its
-  own mode-0700 data root and is currently empty. Full browser tests passed
+  own mode-0700 data root and was initially empty. Full browser tests passed
   over its original private HTTPS route, then synthetic test data was moved
   aside; beta data was untouched.
 - Private Serve port 10000 now targets the Caddy edge. It blocks owner pages
@@ -635,9 +635,9 @@ only accepted format now.
   and 403 respectively. The owner Pixel reached both routes. All Serve routes
   remain tailnet-only; Funnel is off. See
   [family pilot preflight](docs/family-pilot-preflight.md).
-- Public opening and family invitations remain pending explicit owner review,
-  and the documented readiness gates. The public
-  client-IP path and off-host backup/restore for valued photos remain untested.
+- Public opening and family invitations remain pending explicit owner review
+  and the documented readiness gates. The public client-IP path and
+  geographically separate backup/restore for valued photos remain untested.
 - The owner created a pilot organizer and event and reported successful
   invitation, upload and cross-user duplicate tests. A read-only audit showed
   two actors, one event, one invitation and 13 media rows, with SQLite and
@@ -645,4 +645,16 @@ only accepted format now.
   original hashes and a 29-file SHA-256 manifest. A separate restore container
   returned HTTP 200 for health and the album and kept matching row counts.
   Snapshot: `../nami-pilot-backups/private-pilot-20261026T164113Z` (UTC).
-  It remains on Beechan, not off-host. The live pilot was restarted healthy.
+  The local snapshot remains on Beechan; an encrypted copy was subsequently
+  sent to Kurochan. The live pilot was restarted healthy.
+- Encrypted off-host pilot backup is now on Kurochan through Restic over the
+  existing SSH route. Snapshot `b00fbe77` passed `restic check --read-data`.
+  A separate container started from the **remote-restored** snapshot and
+  returned HTTP 200 for health and album; its database counts, 29 manifest
+  files and all 13 original hashes matched. A repeatable, briefly quiescing
+  backup script and user systemd timer are installed; both a manual run and
+  service invocation passed. The timer runs daily around noon when Kurochan is
+  reachable. The backup key is stored in protected files on Beechan and
+  Kurochan, never in Git. This is off-host but not geographically off-site;
+  separate-site recovery and an independently stored key remain gates before
+  valued family photos or public access.
