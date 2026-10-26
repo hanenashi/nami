@@ -658,3 +658,6 @@ only accepted format now.
   Kurochan, never in Git. This is off-host but not geographically off-site;
   separate-site recovery and an independently stored key remain gates before
   valued family photos or public access.
+- Owner requested Kurochan backup on demand because Kurochan is usually shut
+  down. The daily timer was disabled and removed; the manual backup service
+  and script remain available. No new backup was made for this change.

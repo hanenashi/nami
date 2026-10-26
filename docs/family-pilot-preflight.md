@@ -59,14 +59,16 @@ known local proxy addresses. Never trust arbitrary `X-Forwarded-For` values.
   repository data check and was restored **from Kurochan** into a disposable
   container. Health, album, all 29 manifest entries, SQLite checks, row counts
   and all 13 original hashes passed. The repeatable backup script and the
-  installed user systemd service also ran successfully on 2026-10-27.
+  installed user systemd service also ran successfully on 2026-10-27. Its
+  daily timer was then disabled and removed at the owner's request because
+  Kurochan is usually shut down. No further backups run automatically.
 
 ## Before a public family pilot
 
 1. The owner has created the pilot organizer. Configure a separate superadmin
    passphrase from an interactive Beechan terminal if owner recovery is desired,
    then verify it only at private port 10001. Do not share either credential.
-2. Decide whether the pilot will still use disposable photos. The daily
+2. Decide whether the pilot will still use disposable photos. The on-demand
    encrypted backup to Kurochan is **off-host**, but both machines are in the
    same home. Before anyone entrusts valued photos, add a geographically
    separate copy, test its clean restore, and keep a recovery-key copy outside
@@ -137,19 +139,21 @@ private recovery copy before relying on this for valued photos. Losing every
 password copy makes the encrypted repository unreadable. Do not print or send
 the password through chat.
 
-The user systemd timer `nami-pilot-backup.timer` is installed and enabled for
-daily 12:00 local time with up to 30 minutes random delay. It requires
-Kurochan to be awake and reachable over SSH. Check the last result and next
-run regularly:
+The automatic timer was disabled and removed at the owner's request. Run a
+backup only when Kurochan is awake and reachable over SSH. The installed
+systemd service can be started manually, and its result inspected afterward:
 
 ```sh
+systemctl --user start nami-pilot-backup.service
 systemctl --user status nami-pilot-backup.service --no-pager
-systemctl --user list-timers nami-pilot-backup.timer --no-pager
 journalctl --user -u nami-pilot-backup.service -n 40 --no-pager
 ```
 
-From the repo, a manual run uses `sg docker -c './scripts/backup-pilot.py'`
-for the current Beechan shell's Docker group. For recovery on Beechan, set
+From the repo, an equivalent direct run uses
+`sg docker -c './scripts/backup-pilot.py'` for the current Beechan shell's
+Docker group. Neither command should be run while Kurochan is shut down;
+the script would still make a new local snapshot before the remote transfer
+failed. For recovery on Beechan, set
 `RESTIC_PASSWORD_FILE` to the protected file path, then use
 `restic -r sftp:kurochan:NAMI-backups/pilot snapshots` and
 `restic -r sftp:kurochan:NAMI-backups/pilot restore <snapshot-id> --target <clean-directory>`.
