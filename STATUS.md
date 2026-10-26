@@ -603,5 +603,10 @@ only accepted format now.
   photos. A read-only check found two actors, one event, one invitation and 19
   media rows. SQLite integrity and foreign-key checks passed; all 19 original
   JPEGs were present and matched their stored sizes and SHA-256 hashes. This
-  verifies the guest flow and original storage, but a new consistent full
-  snapshot is still needed before broadening access.
+  verifies the guest flow and original storage.
+- The owner confirmed the current beta database/photos are disposable tests
+  with copies elsewhere, so a fresh full snapshot is optional for this stage.
+  Tailscale was uninstalled from the external Pixel after the test; the
+  account remains available, and the machine share should be revoked if it is
+  not needed. This does not relax the off-site backup and restore gate for a
+  future pilot carrying irreplaceable family photos.

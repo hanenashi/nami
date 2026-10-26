@@ -1,9 +1,11 @@
 # Beechan private beta operations
 
-This is a private technical deployment. It uses disposable photos until
-off-site recovery and family-pilot readiness are complete. One trusted external
-Android device has a machine share for the access test. NAMI has no public
-internet route.
+This is a private technical deployment. The owner confirmed on 2026-10-27
+that this beta database and its photos are disposable test data with copies
+elsewhere. One trusted external Android device completed the machine-share
+access test; Tailscale was later uninstalled from it. The share can remain
+authorized for future devices on that account until explicitly revoked. NAMI
+has no public internet route.
 
 ## Isolation and access
 
@@ -33,9 +35,11 @@ internet route.
   redeemed a NAMI invitation and uploaded photos. The live database has two
   actors, one event, one invitation and 19 media rows; SQLite integrity and
   foreign keys passed, and all 19 originals matched their stored hashes.
-  Take a new consistent full snapshot before broadening access. Keep Tailscale
-  Funnel off. Future testers must receive machine shares, not full tailnet
-  membership.
+  A new full snapshot is optional while this remains disposable test data;
+  durable off-site backups and a restore test are required before real family
+  photos are entrusted to a publicly reachable pilot. Keep Tailscale Funnel
+  off. Future private-beta testers must receive machine shares, not full
+  tailnet membership.
 
 ## Routine commands
 

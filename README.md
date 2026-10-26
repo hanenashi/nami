@@ -32,7 +32,8 @@ The beta's exact URL is shown by `tailscale serve status`; the
 recovery and access requirements. The owner created its first organizer and
 event. One trusted external Android device has reached NAMI through a machine
 share, redeemed an invitation and uploaded photos; Beechan's other HTTPS port
-did not load from that device. The tailnet
+did not load from that device. The current beta data is disposable test data
+with copies of the photos elsewhere. The tailnet
 policy limits externally shared users to beta HTTPS. Further testers must
 receive machine shares, not full tailnet membership, after the remaining
 access checks. Do not send organizer credentials to guests.
