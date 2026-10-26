@@ -7,6 +7,7 @@ services:
     user: "${NAMI_UID:-1000}:${NAMI_GID:-1000}"
     environment:
       NAMI_SECURE_COOKIES: "${NAMI_SECURE_COOKIES:-false}"
+      NAMI_TRUSTED_PROXIES: "${NAMI_TRUSTED_PROXIES:-}"
     volumes:
       - type: bind
         source: ${NAMI_DATA_DIR:-../nami-data}

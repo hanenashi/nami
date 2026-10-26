@@ -237,8 +237,10 @@ non-secret settings before starting. `NAMI_DATA_DIR` sets the host directory;
 inside the container the path is always `/data`. `NAMI_PORT` changes the host
 port. `NAMI_SECURE_COOKIES` stays `false` for local HTTP and must be `true` under
 HTTPS. An HTTPS reverse proxy can set `NAMI_TRUSTED_PROXIES` to its exact IP or
-CIDR so login and invitation rate limits use client addresses; forwarded
-headers remain untrusted by default. The Compose port is explicitly bound to
+CIDR so login and invitation rate limits use client addresses, but only after
+verifying that proxy replaces client-supplied forwarded headers. Compose passes
+this optional setting into the app; blank leaves proxy trust disabled. The
+Compose port is explicitly bound to
 **127.0.0.1**, not the LAN or public internet. There is deliberately no
 public-bind toggle yet.
 

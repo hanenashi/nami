@@ -4,7 +4,8 @@ import { buildApp } from './app.js';
 
 const port = Number(process.env.PORT ?? '3000');
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be between 1 and 65535');
-const trustedProxies = process.env.NAMI_TRUSTED_PROXIES?.split(',').map(address => address.trim());
+const trustedProxySetting = process.env.NAMI_TRUSTED_PROXIES?.trim();
+const trustedProxies = trustedProxySetting ? trustedProxySetting.split(',').map(address => address.trim()) : undefined;
 if (trustedProxies?.some(address => !address)) throw new Error('NAMI_TRUSTED_PROXIES contains an empty address');
 
 const app = await buildApp({

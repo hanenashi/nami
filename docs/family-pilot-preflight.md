@@ -36,7 +36,9 @@ known local proxy addresses. Never trust arbitrary `X-Forwarded-For` values.
   moved aside and the live pilot data root recreated empty.
 - After Caddy was inserted, local and tailnet HTTPS health returned 200;
   owner page/API returned 404 through port 10000 and 200 through private port
-  10001. Encoded and doubled-slash admin paths were also checked locally.
+  10001. Encoded, doubled-slash and dot-path admin variants returned no owner
+  data through the public candidate route. Anonymous requests for the live
+  event, invitation history, preview and original all returned 401.
 - Chromium phone and WebKit iPad loaded `/organizer` over private HTTPS through
   Caddy; no writes were made. Same-origin logout returned 204 and a foreign
   origin returned 403. Owner Pixel reached both private HTTPS routes.
@@ -48,6 +50,12 @@ known local proxy addresses. Never trust arbitrary `X-Forwarded-For` values.
   already uploaded photo. On 2026-10-27, the live pilot had two actors, one
   event, one invitation and 13 media rows. SQLite integrity and foreign-key
   checks passed. All 13 original JPEGs matched their stored SHA-256 hashes.
+- All 13 pilot previews were checked for embedded EXIF, XMP and IPTC metadata;
+  none contained it. Originals remain byte-exact and may retain GPS metadata.
+  The 13 originals totaled 21,780,242 bytes and no unfinished uploads were
+  present. Beechan had 134 GiB free at this check. NAMI limits each JPEG to
+  25 MiB and each actor to 10 unfinished upload sessions, but currently has
+  no total event storage quota; monitor disk use during the pilot.
 - A consistent full snapshot was made while the pilot app was briefly stopped,
   at `../nami-pilot-backups/private-pilot-20261026T164113Z` (UTC timestamp).
   Its 29-file hash manifest passed. A separate restore container served health

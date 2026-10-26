@@ -661,3 +661,16 @@ only accepted format now.
 - Owner requested Kurochan backup on demand because Kurochan is usually shut
   down. The daily timer was disabled and removed; the manual backup service
   and script remain available. No new backup was made for this change.
+- Public-edge read-only security check: anonymous requests for the live pilot
+  event, invitation history, preview and original each returned 401; owner
+  API returned 404 through the album route. Encoded and dot-path owner route
+  variants returned no owner data. Standard Compose now forwards its optional
+  exact trusted-proxy setting; a blank value leaves trust disabled. Lint,
+  build and all 13 API tests passed; a real scratch server started with a
+  blank value and rejected a malformed comma-separated value. The live pilot
+  remains on its existing image with proxy trust disabled and Funnel off.
+- Pilot storage inspection found 13 originals totaling 21,780,242 bytes and
+  zero unfinished upload sessions; Beechan's filesystem had 134 GiB free at
+  the check. All 13 generated JPEG previews lacked embedded EXIF, XMP and IPTC
+  metadata. Individual JPEGs are limited to 25 MiB and an actor may hold at
+  most 10 unfinished upload sessions; there is no total event storage quota.
