@@ -596,7 +596,12 @@ only accepted format now.
   restriction but does not measure a final timeout or SSH denial. The OAuth
   credential used for policy setup was revoked by the owner and its local
   secret file was removed. Beta SQLite integrity and foreign keys passed.
-- **Broader tester rollout is still gated.** No NAMI guest invitation was
-  tested from the separate-tailnet device, and external SSH denial has not
-  been measured. Physical iPad/iPhone beta use, off-site backups and real
+- **Broader tester rollout is still gated.** External SSH denial has not been
+  measured. Physical iPad/iPhone beta use, off-site backups and real
   schema-change rollback also remain unverified. Do not add more testers yet.
+- The separate-tailnet Pixel then redeemed a NAMI invitation and uploaded
+  photos. A read-only check found two actors, one event, one invitation and 19
+  media rows. SQLite integrity and foreign-key checks passed; all 19 original
+  JPEGs were present and matched their stored sizes and SHA-256 hashes. This
+  verifies the guest flow and original storage, but a new consistent full
+  snapshot is still needed before broadening access.

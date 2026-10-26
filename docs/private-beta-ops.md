@@ -29,9 +29,13 @@ internet route.
   Beechan's port-443 HTTPS URL kept loading without a response on that Pixel,
   while the owner's Pixel received HTTP 404 from the same URL. This is strong
   evidence of the intended deny, but a timed connection result and SSH denial
-  have not been measured from the external device. No NAMI guest invitation
-  flow was tested on that device. Keep Tailscale Funnel off. Future testers
-  must receive machine shares, not full tailnet membership.
+  have not been measured from the external device. The same Pixel subsequently
+  redeemed a NAMI invitation and uploaded photos. The live database has two
+  actors, one event, one invitation and 19 media rows; SQLite integrity and
+  foreign keys passed, and all 19 originals matched their stored hashes.
+  Take a new consistent full snapshot before broadening access. Keep Tailscale
+  Funnel off. Future testers must receive machine shares, not full tailnet
+  membership.
 
 ## Routine commands
 
